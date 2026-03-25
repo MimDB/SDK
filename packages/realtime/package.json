@@ -1,0 +1,40 @@
+{
+  "name": "@mimdb/realtime",
+  "version": "0.1.0",
+  "description": "Realtime WebSocket client for Mimisbrunnr",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "ws": ">=8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ws": { "optional": true }
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.1",
+    "typescript": "^6.0.2"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Provant15/mimdb-js"
+  },
+  "keywords": ["mimdb", "mimisbrunnr", "realtime", "websocket", "baas"]
+}

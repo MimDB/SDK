@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "name": "mimdb-sdk",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  }
+}
