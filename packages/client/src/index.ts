@@ -10,6 +10,8 @@ export type { AuthChangeEvent } from './auth'
 export { AuthAdminClient } from './auth-admin'
 export { InMemoryTokenStore, LocalStorageTokenStore } from './auth-store'
 export type { TokenStore } from './auth-store'
+export { StorageClient, BucketClient } from './storage'
+export type { BucketOptions } from './storage'
 export type {
   QueryResult,
   OrderOptions,
@@ -19,6 +21,8 @@ export type {
   ClientOptions,
   User,
   Tokens,
+  Bucket,
+  UploadOptions,
 } from './types'
 
 /**

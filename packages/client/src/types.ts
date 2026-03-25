@@ -109,3 +109,35 @@ export interface Tokens {
   /** Number of seconds until the access token expires. */
   expires_in: number
 }
+
+// ---------------------------------------------------------------------------
+// Storage types
+// ---------------------------------------------------------------------------
+
+/**
+ * A storage bucket managed by the MimDB Storage API.
+ */
+export interface Bucket {
+  /** Unique bucket name. */
+  name: string
+  /** Whether the bucket allows unauthenticated read access. */
+  public: boolean
+  /** Maximum file size in bytes, or null for unlimited. */
+  file_size_limit: number | null
+  /** Allowed MIME types for uploads, or null for unrestricted. */
+  allowed_mime_types: string[] | null
+  /** ISO 8601 timestamp of when the bucket was created. */
+  created_at: string
+  /** ISO 8601 timestamp of when the bucket was last updated. */
+  updated_at: string
+}
+
+/**
+ * Options for file upload operations.
+ */
+export interface UploadOptions {
+  /** MIME type of the file. Defaults to `application/octet-stream`. */
+  contentType?: string
+  /** When true, overwrites an existing file at the same path. */
+  upsert?: boolean
+}

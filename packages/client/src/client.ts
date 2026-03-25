@@ -3,6 +3,7 @@ import { InMemoryTokenStore } from './auth-store'
 import type { TokenStore } from './auth-store'
 import { MimDBError } from './errors'
 import { QueryBuilder } from './rest'
+import { StorageClient } from './storage'
 import type { ClientOptions, QueryResult } from './types'
 
 /**
@@ -31,6 +32,7 @@ export class MimDBClient {
   private readonly fetchFn: typeof fetch
   private readonly defaultHeaders: Record<string, string>
   private _auth: AuthClient | null = null
+  private _storage: StorageClient | null = null
   private readonly tokenStore: TokenStore
 
   /**
@@ -97,6 +99,34 @@ export class MimDBClient {
     }
 
     return this._auth
+  }
+
+  /**
+   * Access the storage client for file uploads, downloads, signed URLs,
+   * and bucket management.
+   *
+   * The storage client is lazily instantiated on first access and shares
+   * the same auth headers as the REST client.
+   *
+   * @example
+   * ```ts
+   * // Upload a file
+   * const { path } = await client.storage.from('avatars').upload('photo.png', blob)
+   *
+   * // Get a public URL
+   * const url = client.storage.from('avatars').getPublicUrl('photo.png')
+   * ```
+   */
+  get storage(): StorageClient {
+    if (!this._storage) {
+      this._storage = new StorageClient(
+        this.baseUrl,
+        this.ref,
+        this.fetchFn,
+        this.defaultHeaders,
+      )
+    }
+    return this._storage
   }
 
   /**
