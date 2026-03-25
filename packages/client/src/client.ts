@@ -64,6 +64,19 @@ export class MimDBClient {
   }
 
   /**
+   * Return the core configuration values used to construct this client.
+   *
+   * Useful when companion packages (e.g. `@mimdb/react`) need access to
+   * the URL, project reference, and API key to create their own service
+   * clients such as `MimDBRealtimeClient`.
+   *
+   * @returns An object containing the base URL, project ref, and API key.
+   */
+  getConfig(): { url: string; ref: string; apiKey: string } {
+    return { url: this.baseUrl, ref: this.ref, apiKey: this.apiKey }
+  }
+
+  /**
    * Access the authentication client for sign-up, sign-in, OAuth, and
    * session management.
    *
