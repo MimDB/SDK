@@ -89,8 +89,8 @@ export class StorageClient {
 
     const body: Record<string, unknown> = { name }
     if (opts?.public !== undefined) body.public = opts.public
-    if (opts?.fileSizeLimit !== undefined) body.file_size_limit = opts.fileSizeLimit
-    if (opts?.allowedTypes !== undefined) body.allowed_types = opts.allowedTypes
+    // Note: file_size_limit and allowed_types are only supported on updateBucket,
+    // not createBucket. The backend create handler only accepts name + public.
 
     const response = await this.fetchFn(url, {
       method: 'POST',

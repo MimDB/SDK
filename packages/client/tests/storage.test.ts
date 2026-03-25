@@ -65,8 +65,6 @@ describe('StorageClient', () => {
 
       const bucket = await storage.createBucket('avatars', {
         public: true,
-        fileSizeLimit: 1024,
-        allowedTypes: ['image/png'],
       })
 
       expect(bucket.name).toBe('avatars')
@@ -78,11 +76,10 @@ describe('StorageClient', () => {
       const init = call[1] as RequestInit
       expect(url).toBe(`${URL}/v1/storage/${REF}/buckets`)
       expect(init.method).toBe('POST')
+      // Backend create only accepts name + public (not fileSizeLimit/allowedTypes)
       expect(JSON.parse(init.body as string)).toEqual({
         name: 'avatars',
         public: true,
-        file_size_limit: 1024,
-        allowed_types: ['image/png'],
       })
     })
   })
