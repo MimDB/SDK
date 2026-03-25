@@ -67,7 +67,7 @@ export function useInsert<T = Record<string, unknown>>(
         }
       : undefined,
     onError: options?.optimistic
-      ? (_err, _data, context: { previous?: [unknown[], T[] | undefined][] } | undefined) => {
+      ? (_err, _data, context: { previous?: [readonly unknown[], T[] | undefined][] } | undefined) => {
           if (context?.previous) {
             for (const [key, data] of context.previous) {
               queryClient.setQueryData(key as unknown[], data)
@@ -159,7 +159,7 @@ export function useUpdate<T = Record<string, unknown>>(
         }
       : undefined,
     onError: options?.optimistic
-      ? (_err, _data, context: { previous?: [unknown[], T[] | undefined][] } | undefined) => {
+      ? (_err, _data, context: { previous?: [readonly unknown[], T[] | undefined][] } | undefined) => {
           if (context?.previous) {
             for (const [key, data] of context.previous) {
               queryClient.setQueryData(key as unknown[], data)
@@ -235,7 +235,7 @@ export function useDelete(
         }
       : undefined,
     onError: options?.optimistic
-      ? (_err, _data, context: { previous?: [unknown[], Record<string, unknown>[] | undefined][] } | undefined) => {
+      ? (_err, _data, context: { previous?: [readonly unknown[], Record<string, unknown>[] | undefined][] } | undefined) => {
           if (context?.previous) {
             for (const [key, data] of context.previous) {
               queryClient.setQueryData(key as unknown[], data)

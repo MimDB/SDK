@@ -42,7 +42,7 @@ const INITIAL_RECONNECT_DELAY = 1_000
 export class MimDBRealtimeClient {
   private readonly url: string
   private readonly projectRef: string
-  private readonly apiKey: string
+  private apiKey: string
   private readonly autoConnect: boolean
   private readonly heartbeatInterval: number
   private readonly heartbeatTimeout: number
@@ -111,6 +111,45 @@ export class MimDBRealtimeClient {
   ) {
     for (const cb of this.listeners.get(event) ?? []) {
       ;(cb as Function)(...args)
+    }
+  }
+
+  /**
+   * Replace the API key (JWT) used for authentication.
+   *
+   * If the client is currently connected, the WebSocket is closed and
+   * a fresh connection is opened with the new token. All active
+   * subscriptions are automatically re-established on reconnect.
+   *
+   * Pass an empty string to clear the token without reconnecting
+   * (used on logout).
+   *
+   * @param token - New API key / JWT to authenticate with.
+   */
+  setToken(token: string): void {
+    this.apiKey = token
+
+    // Empty token means logout - disconnect without reconnect
+    if (!token) {
+      this.disconnect()
+      return
+    }
+
+    // If connected, reconnect with the new token
+    if (this._state === 'connected' || this._state === 'connecting' || this._state === 'reconnecting') {
+      // Close current connection without triggering auto-reconnect
+      this.stopHeartbeat()
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer)
+        this.reconnectTimer = null
+      }
+      if (this.ws) {
+        this.ws.onclose = null
+        this.ws.close()
+        this.ws = null
+      }
+      // Reconnect with the new token
+      this.doConnect()
     }
   }
 

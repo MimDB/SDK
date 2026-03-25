@@ -174,6 +174,38 @@ var MimDBRealtimeClient = class {
     }
   }
   /**
+   * Replace the API key (JWT) used for authentication.
+   *
+   * If the client is currently connected, the WebSocket is closed and
+   * a fresh connection is opened with the new token. All active
+   * subscriptions are automatically re-established on reconnect.
+   *
+   * Pass an empty string to clear the token without reconnecting
+   * (used on logout).
+   *
+   * @param token - New API key / JWT to authenticate with.
+   */
+  setToken(token) {
+    this.apiKey = token;
+    if (!token) {
+      this.disconnect();
+      return;
+    }
+    if (this._state === "connected" || this._state === "connecting" || this._state === "reconnecting") {
+      this.stopHeartbeat();
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      if (this.ws) {
+        this.ws.onclose = null;
+        this.ws.close();
+        this.ws = null;
+      }
+      this.doConnect();
+    }
+  }
+  /**
    * Open the WebSocket connection.
    * No-op if already connecting or connected.
    */

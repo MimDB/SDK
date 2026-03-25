@@ -15,8 +15,8 @@ importers:
   packages/client:
     dependencies:
       '@mimdb/realtime':
-        specifier: workspace:*
-        version: link:../realtime
+        specifier: ^0.1.1
+        version: 0.1.1(ws@8.20.0)
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -302,6 +302,14 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@mimdb/realtime@0.1.1':
+    resolution: {integrity: sha512-UqnjSecq/VFhxpjIt7HamyQprZxSEkvDoxNwvfU8mi1zwO6c8VdZEd7392bsNtb/MjDJVBZ7drvmjMXtZ6PZbg==}
+    peerDependencies:
+      ws: '>=8.0.0'
+    peerDependenciesMeta:
+      ws:
+        optional: true
 
   '@napi-rs/wasm-runtime@1.1.1':
     resolution: {integrity: sha512-p64ah1M1ld8xjWv3qbvFwHiFVWrq1yFvV4f7w+mzaqiR4IlSgkqhcRdHwsGgomwzBH51sRY4NEowLxnaBjcW/A==}
@@ -1377,6 +1385,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@mimdb/realtime@0.1.1(ws@8.20.0)':
+    optionalDependencies:
+      ws: 8.20.0
 
   '@napi-rs/wasm-runtime@1.1.1':
     dependencies:
