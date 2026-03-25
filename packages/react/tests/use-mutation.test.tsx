@@ -94,8 +94,8 @@ function createWrapper() {
       mutations: { retry: false },
     },
   })
-  // Prepopulate cache
-  queryClient.setQueryData(['mimdb', 'todos'], [
+  // Prepopulate cache using the full key format produced by useQuery
+  queryClient.setQueryData(['mimdb', 'todos', undefined], [
     { id: '1', task: 'Existing task', done: false },
     { id: '2', task: 'Another task', done: true },
   ])
@@ -131,7 +131,7 @@ describe('useInsert optimistic', () => {
     })
 
     // The cache should have been updated optimistically
-    const cached = queryClient.getQueryData<Todo[]>(['mimdb', 'todos'])
+    const cached = queryClient.getQueryData<Todo[]>(['mimdb', 'todos', undefined])
     expect(cached?.length).toBe(3)
     expect(cached?.[2]?.task).toBe('New task')
   })
@@ -151,7 +151,7 @@ describe('useUpdate optimistic', () => {
       await new Promise((r) => setTimeout(r, 0))
     })
 
-    const cached = queryClient.getQueryData<Todo[]>(['mimdb', 'todos'])
+    const cached = queryClient.getQueryData<Todo[]>(['mimdb', 'todos', undefined])
     const row = cached?.find((r) => r.id === '1')
     expect(row?.done).toBe(true)
   })
@@ -171,7 +171,7 @@ describe('useDelete optimistic', () => {
       await new Promise((r) => setTimeout(r, 0))
     })
 
-    const cached = queryClient.getQueryData<Record<string, unknown>[]>(['mimdb', 'todos'])
+    const cached = queryClient.getQueryData<Record<string, unknown>[]>(['mimdb', 'todos', undefined])
     expect(cached?.length).toBe(1)
     expect(cached?.[0]?.id).toBe('2')
   })

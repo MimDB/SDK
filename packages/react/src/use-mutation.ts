@@ -58,8 +58,8 @@ export function useInsert<T = Record<string, unknown>>(
     onMutate: options?.optimistic
       ? async (newData) => {
           await queryClient.cancelQueries({ queryKey: ['mimdb', table] })
-          const previous = queryClient.getQueryData<T[]>(['mimdb', table])
-          queryClient.setQueryData<T[]>(['mimdb', table], (old) => [
+          const previous = queryClient.getQueriesData<T[]>({ queryKey: ['mimdb', table] })
+          queryClient.setQueriesData<T[]>({ queryKey: ['mimdb', table] }, (old) => [
             ...(old ?? []),
             newData as T,
           ])
@@ -67,9 +67,11 @@ export function useInsert<T = Record<string, unknown>>(
         }
       : undefined,
     onError: options?.optimistic
-      ? (_err, _data, context: { previous?: T[] } | undefined) => {
-          if (context?.previous !== undefined) {
-            queryClient.setQueryData(['mimdb', table], context.previous)
+      ? (_err, _data, context: { previous?: [unknown[], T[] | undefined][] } | undefined) => {
+          if (context?.previous) {
+            for (const [key, data] of context.previous) {
+              queryClient.setQueryData(key as unknown[], data)
+            }
           }
         }
       : undefined,
@@ -143,8 +145,8 @@ export function useUpdate<T = Record<string, unknown>>(
     onMutate: options?.optimistic
       ? async ({ data, eq }) => {
           await queryClient.cancelQueries({ queryKey: ['mimdb', table] })
-          const previous = queryClient.getQueryData<T[]>(['mimdb', table])
-          queryClient.setQueryData<T[]>(['mimdb', table], (old) =>
+          const previous = queryClient.getQueriesData<T[]>({ queryKey: ['mimdb', table] })
+          queryClient.setQueriesData<T[]>({ queryKey: ['mimdb', table] }, (old) =>
             (old ?? []).map((row) => {
               const record = row as Record<string, unknown>
               const matches = Object.entries(eq).every(
@@ -157,9 +159,11 @@ export function useUpdate<T = Record<string, unknown>>(
         }
       : undefined,
     onError: options?.optimistic
-      ? (_err, _data, context: { previous?: T[] } | undefined) => {
-          if (context?.previous !== undefined) {
-            queryClient.setQueryData(['mimdb', table], context.previous)
+      ? (_err, _data, context: { previous?: [unknown[], T[] | undefined][] } | undefined) => {
+          if (context?.previous) {
+            for (const [key, data] of context.previous) {
+              queryClient.setQueryData(key as unknown[], data)
+            }
           }
         }
       : undefined,
@@ -219,8 +223,8 @@ export function useDelete(
     onMutate: options?.optimistic
       ? async (eq) => {
           await queryClient.cancelQueries({ queryKey: ['mimdb', table] })
-          const previous = queryClient.getQueryData<Record<string, unknown>[]>(['mimdb', table])
-          queryClient.setQueryData<Record<string, unknown>[]>(['mimdb', table], (old) =>
+          const previous = queryClient.getQueriesData<Record<string, unknown>[]>({ queryKey: ['mimdb', table] })
+          queryClient.setQueriesData<Record<string, unknown>[]>({ queryKey: ['mimdb', table] }, (old) =>
             (old ?? []).filter((row) =>
               !Object.entries(eq).every(
                 ([col, val]) => String(row[col]) === val,
@@ -231,9 +235,11 @@ export function useDelete(
         }
       : undefined,
     onError: options?.optimistic
-      ? (_err, _data, context: { previous?: Record<string, unknown>[] } | undefined) => {
-          if (context?.previous !== undefined) {
-            queryClient.setQueryData(['mimdb', table], context.previous)
+      ? (_err, _data, context: { previous?: [unknown[], Record<string, unknown>[] | undefined][] } | undefined) => {
+          if (context?.previous) {
+            for (const [key, data] of context.previous) {
+              queryClient.setQueryData(key as unknown[], data)
+            }
           }
         }
       : undefined,

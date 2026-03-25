@@ -75,6 +75,16 @@ export class AuthClient {
     this.defaultHeaders = defaultHeaders
     this.tokenStore = tokenStore
     this.autoRefresh = autoRefresh
+
+    // If a session already exists in the store (e.g. restored from localStorage
+    // on app startup), arm the auto-refresh timer so the token is renewed before
+    // it expires without requiring the user to sign in again.
+    if (this.autoRefresh) {
+      const session = this.tokenStore.get()
+      if (session?.accessToken) {
+        this.scheduleAutoRefresh(session.accessToken)
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -370,6 +380,9 @@ export class AuthClient {
 
     this.tokenStore.set(accessToken, refreshToken)
     this.onTokenChange?.(accessToken)
+    if (this.autoRefresh) {
+      this.scheduleAutoRefresh(accessToken)
+    }
     this.emit('SIGNED_IN')
 
     return { accessToken, refreshToken, expiresIn }
