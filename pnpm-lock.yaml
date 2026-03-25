@@ -31,11 +31,11 @@ importers:
   packages/react:
     devDependencies:
       '@mimdb/client':
-        specifier: workspace:*
-        version: link:../client
+        specifier: ^0.2.1
+        version: 0.2.1(ws@8.20.0)
       '@mimdb/realtime':
-        specifier: workspace:*
-        version: link:../realtime
+        specifier: ^0.2.0
+        version: 0.2.0(ws@8.20.0)
       '@tanstack/react-query':
         specifier: ^5.83.0
         version: 5.95.2(react@18.3.1)
@@ -303,8 +303,19 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
+  '@mimdb/client@0.2.1':
+    resolution: {integrity: sha512-/5cqi3OmIiclAHQFWuutE/CCDKHl0jUBFyxZCNeRTVq0G43N4AQk0scrVAdIVKORVIU9p6eLCHkA1/0KJoMV/Q==}
+
   '@mimdb/realtime@0.1.1':
     resolution: {integrity: sha512-UqnjSecq/VFhxpjIt7HamyQprZxSEkvDoxNwvfU8mi1zwO6c8VdZEd7392bsNtb/MjDJVBZ7drvmjMXtZ6PZbg==}
+    peerDependencies:
+      ws: '>=8.0.0'
+    peerDependenciesMeta:
+      ws:
+        optional: true
+
+  '@mimdb/realtime@0.2.0':
+    resolution: {integrity: sha512-ULAEcEDm3nsFCaB4NmzXvycExh+oKmimG3fVAv1W5rxokgsWICM/W1/14HkOQIjOy4gwHI6+Sw5JgeRxbAVRDw==}
     peerDependencies:
       ws: '>=8.0.0'
     peerDependenciesMeta:
@@ -1386,7 +1397,17 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@mimdb/client@0.2.1(ws@8.20.0)':
+    dependencies:
+      '@mimdb/realtime': 0.1.1(ws@8.20.0)
+    transitivePeerDependencies:
+      - ws
+
   '@mimdb/realtime@0.1.1(ws@8.20.0)':
+    optionalDependencies:
+      ws: 8.20.0
+
+  '@mimdb/realtime@0.2.0(ws@8.20.0)':
     optionalDependencies:
       ws: 8.20.0
 
