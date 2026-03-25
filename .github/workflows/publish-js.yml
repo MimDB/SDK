@@ -1,9 +1,13 @@
-name: Publish to npm
+name: Publish JS SDK to npm
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'js/v*'
+
+defaults:
+  run:
+    working-directory: js
 
 jobs:
   publish:
