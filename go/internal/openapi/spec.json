@@ -1,0 +1,3058 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mimisbrunnr API",
+    "description": "Backend-as-a-Service platform API",
+    "version": "1.0.0",
+    "contact": {
+      "name": "MimDB"
+    }
+  },
+  "servers": [
+    {
+      "url": "{protocol}://{host}",
+      "description": "Mimisbrunnr server root. All API paths include /v1/ prefix explicitly.",
+      "variables": {
+        "protocol": {
+          "default": "https",
+          "enum": ["http", "https"]
+        },
+        "host": {
+          "default": "localhost:8080"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {"name": "Platform", "description": "Platform management"},
+    {"name": "Auth", "description": "Authentication and authorization"},
+    {"name": "AuthHTML", "description": "Authentication HTML pages"},
+    {"name": "Storage", "description": "Object storage"},
+    {"name": "StorageBinary", "description": "Storage binary endpoints"},
+    {"name": "StorageUpload", "description": "Resumable uploads"},
+    {"name": "Vectors", "description": "Vector similarity search"},
+    {"name": "Stats", "description": "Query statistics"},
+    {"name": "Cron", "description": "Scheduled job management"},
+    {"name": "Introspect", "description": "Table schema introspection"},
+    {"name": "SQL", "description": "SQL query execution"},
+    {"name": "Realtime", "description": "WebSocket realtime"},
+    {"name": "Health", "description": "Health and readiness probes"}
+  ],
+  "paths": {
+    "/v1/platform/organizations": {
+      "post": {
+        "operationId": "createOrganization",
+        "summary": "Create organization",
+        "description": "Creates a new organization. Requires platform admin authentication.",
+        "tags": ["Platform"],
+        "security": [{ "AdminBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "slug"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "slug": { "type": "string" },
+                  "owner_user_id": { "type": "string", "format": "uuid", "description": "Owner user ID. Used in static admin secret auth when no JWT identity is available." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Organization created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Organization" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`PROJ-0000` Invalid request body | `PROJ-0001` Owner user ID is required | `PROJ-0002` Organization name is required | `PROJ-0003` Invalid slug format",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`PROJ-0100` Missing or invalid authorization header | `PROJ-0101` Invalid credentials",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "409": {
+            "description": "`PROJ-0300` Organization slug already taken",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`PROJ-0500` Internal error | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`PROJ-0501` Platform API not configured | `SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/platform/organizations/{orgID}": {
+      "get": {
+        "operationId": "getOrganization",
+        "summary": "Get organization",
+        "description": "Retrieves an organization by ID.",
+        "tags": ["Platform"],
+        "security": [{ "AdminBearer": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/OrgID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organization details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Organization" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`PROJ-0100` Missing or invalid authorization header | `PROJ-0101` Invalid credentials",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`PROJ-0200` Organization not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`PROJ-0501` Platform API not configured | `SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/platform/organizations/{orgID}/projects": {
+      "get": {
+        "operationId": "listProjects",
+        "summary": "List organization projects",
+        "description": "Lists all projects belonging to an organization.",
+        "tags": ["Platform"],
+        "security": [{ "AdminBearer": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/OrgID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of projects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Project" } },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`SYS-0003` Invalid pagination cursor",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`PROJ-0100` Missing or invalid authorization header | `PROJ-0101` Invalid credentials",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`PROJ-0200` Organization not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`PROJ-0500` Internal error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`PROJ-0501` Platform API not configured | `SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/platform/projects": {
+      "post": {
+        "operationId": "createProject",
+        "summary": "Create project",
+        "description": "Creates a new project within an organization. Returns project details including API keys (shown once).",
+        "tags": ["Platform"],
+        "security": [{ "AdminBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["org_id", "name"],
+                "properties": {
+                  "org_id": { "type": "string", "format": "uuid" },
+                  "name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Project created (includes API keys, shown once)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/ProjectWithKeys" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`PROJ-0000` Invalid request body | `PROJ-0004` Valid org_id is required",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`PROJ-0100` Missing or invalid authorization header | `PROJ-0101` Invalid credentials",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`PROJ-0500` Internal error | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`PROJ-0501` Platform API not configured | `SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/platform/projects/{projectID}": {
+      "get": {
+        "operationId": "getProject",
+        "summary": "Get project",
+        "description": "Retrieves a project by ID.",
+        "tags": ["Platform"],
+        "security": [{ "AdminBearer": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Project" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`PROJ-0100` Missing or invalid authorization header | `PROJ-0101` Invalid credentials",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`PROJ-0201` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`PROJ-0501` Platform API not configured | `SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/platform/projects/{projectID}/rotate-db-credential": {
+      "post": {
+        "operationId": "rotateDBCredential",
+        "summary": "Rotate database credentials",
+        "description": "Rotates the database credentials for a project.",
+        "tags": ["Platform"],
+        "security": [{ "AdminBearer": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "New credentials (shown once)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "db_connection_string": { "type": "string", "description": "New pooled connection string" }
+                      }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`PROJ-0100` Missing or invalid authorization header | `PROJ-0101` Invalid credentials",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`PROJ-0201` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`POOL-0011` DB credential rotation failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "501": {
+            "description": "`POOL-0013` DB credential rotation not supported in service_role pooling mode",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`PROJ-0501` Platform API not configured",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/auth/{ref}/signup": {
+      "post": {
+        "operationId": "signup",
+        "summary": "Sign up",
+        "description": "Creates a new user account with email and password.",
+        "tags": ["Auth"],
+        "security": [],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created and tokens issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AuthResponse" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`AUTH-0000` Invalid request body | `AUTH-0002` Email and password are required | `AUTH-0003` Password must be at least 8 characters | `AUTH-0004` Invalid email address",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "409": {
+            "description": "`AUTH-0300` User already exists",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/auth/{ref}/token": {
+      "post": {
+        "operationId": "getToken",
+        "summary": "Get token",
+        "description": "Authenticates a user via password or refresh token grant.",
+        "tags": ["Auth"],
+        "security": [],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          {
+            "name": "grant_type",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "enum": ["password", "refresh_token"] },
+            "description": "Authentication grant type"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": ["email", "password"],
+                    "properties": {
+                      "email": { "type": "string", "format": "email" },
+                      "password": { "type": "string" }
+                    },
+                    "title": "PasswordGrant"
+                  },
+                  {
+                    "type": "object",
+                    "required": ["refresh_token"],
+                    "properties": {
+                      "refresh_token": { "type": "string" }
+                    },
+                    "title": "RefreshTokenGrant"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tokens issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AuthResponse" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`AUTH-0000` Invalid request body | `AUTH-0001` Missing or malformed grant_type parameter",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "**Password grant:** `AUTH-0104` Invalid credentials. **Refresh grant:** `AUTH-0105` Invalid or expired refresh token | `AUTH-0106` Token has expired | `AUTH-0107` Token has been revoked | `AUTH-0108` Token version mismatch",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`AUTH-0110` User account is suspended",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/auth/{ref}/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Logout",
+        "description": "Revokes a refresh token, ending the session.",
+        "tags": ["Auth"],
+        "security": [],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["refresh_token"],
+                "properties": {
+                  "refresh_token": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "Logged out" },
+          "400": {
+            "description": "`AUTH-0000` Invalid request body",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`AUTH-0105` Invalid or expired refresh token",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/auth/{ref}/verify": {
+      "get": {
+        "operationId": "verifyEmailGet",
+        "summary": "Verify email (GET)",
+        "description": "Verifies a user's email via token query parameter.",
+        "tags": ["Auth"],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Email verification token"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Email verified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": { "message": { "type": "string" } }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`AUTH-0400` Invalid or expired verification token | `AUTH-0401` Verification token has already been used | `AUTH-0402` Email address is already confirmed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "post": {
+        "operationId": "verifyEmailPost",
+        "summary": "Verify email (POST)",
+        "description": "Verifies a user's email via token in request body.",
+        "tags": ["Auth"],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["token"],
+                "properties": {
+                  "token": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email verified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": { "message": { "type": "string" } }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`AUTH-0000` Invalid request body | `AUTH-0002` Email and password are required | `AUTH-0400` Invalid or expired verification token | `AUTH-0401` Verification token has already been used | `AUTH-0402` Email address is already confirmed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/auth/{ref}/forgot-password": {
+      "post": {
+        "operationId": "forgotPassword",
+        "summary": "Request password reset",
+        "description": "Sends a password reset email to the user.",
+        "tags": ["Auth"],
+        "security": [],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset email sent (always returns 200 to prevent user enumeration)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": { "message": { "type": "string" } }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`AUTH-0000` Invalid request body | `AUTH-0002` Email and password are required",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/auth/{ref}/reset-password": {
+      "get": {
+        "operationId": "resetPasswordForm",
+        "summary": "Password reset form",
+        "description": "Serves an HTML password reset form. Not consumed by the SPA.",
+        "tags": ["AuthHTML"],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Password reset token"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTML password reset form",
+            "content": {
+              "text/html": {
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing token query parameter",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "post": {
+        "operationId": "resetPassword",
+        "summary": "Reset password",
+        "description": "Resets a user's password using a valid reset token.",
+        "tags": ["Auth"],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["token", "new_password"],
+                "properties": {
+                  "token": { "type": "string" },
+                  "new_password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": { "message": { "type": "string" } }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`AUTH-0000` Invalid request body | `AUTH-0002` Email and password are required | `AUTH-0003` Password must be at least 8 characters | `AUTH-0403` Invalid or expired password reset token | `AUTH-0404` Password reset token has already been used",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/auth/{ref}/user": {
+      "get": {
+        "operationId": "getUser",
+        "summary": "Get current user",
+        "description": "Returns the authenticated user's profile.",
+        "tags": ["Auth"],
+        "security": [{ "ProjectJWT": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AuthUser" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH-0100` Invalid or expired access token | `AUTH-0101` Token version revoked | `AUTH-0102` Missing or invalid authorization header | `AUTH-0103` Authentication required",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`AUTH-0109` Insufficient role for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found | `AUTH-0201` User not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable | `AUTH-0600` Internal configuration error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateUser",
+        "summary": "Update current user",
+        "description": "Updates the authenticated user's metadata.",
+        "tags": ["Auth"],
+        "security": [{ "ProjectJWT": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_metadata": { "type": "object", "description": "User-settable metadata" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AuthUser" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`AUTH-0000` Invalid request body",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`AUTH-0100` Invalid or expired access token | `AUTH-0101` Token version revoked | `AUTH-0102` Missing or invalid authorization header | `AUTH-0103` Authentication required",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`AUTH-0109` Insufficient role for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/auth/{ref}/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "summary": "List sessions",
+        "description": "Lists active sessions for the authenticated user.",
+        "tags": ["Auth"],
+        "security": [{ "ProjectJWT": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Session" } },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH-0100` Invalid or expired access token | `AUTH-0101` Token version revoked | `AUTH-0102` Missing or invalid authorization header | `AUTH-0103` Authentication required",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`AUTH-0109` Insufficient role for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`AUTH-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`AUTH-0500` Authentication service temporarily unavailable | `AUTH-0600` Internal configuration error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/storage/{ref}/object/{bucket}/{path}": {
+      "get": {
+        "operationId": "downloadObject",
+        "summary": "Download object",
+        "description": "Downloads a storage object by path. Returns the file stream. Also accepts a signed URL via ?token= query parameter for unauthenticated access.",
+        "tags": ["StorageBinary"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "bucket", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "path", "in": "path", "required": true, "schema": { "type": "string" }, "allowReserved": true, "description": "Object path (may contain slashes)" }
+        ],
+        "responses": {
+          "200": {
+            "description": "File stream",
+            "content": {
+              "application/octet-stream": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            }
+          },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0101` Token version revoked | `STOR-0102` Missing or invalid authorization header | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project | `STOR-0105` Invalid signed URL | `STOR-0106` Signed URL has expired | `STOR-0107` Invalid signed URL signature | `STOR-0108` Signed URL verification failed | `STOR-0109` Authentication required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | `STOR-0201` Bucket not found | `STOR-0202` Object not found | `STOR-0203` Not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STOR-0500` Storage service temporarily unavailable",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteObject",
+        "summary": "Delete object",
+        "description": "Deletes a storage object by path.",
+        "tags": ["Storage"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "bucket", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "path", "in": "path", "required": true, "schema": { "type": "string" }, "allowReserved": true, "description": "Object path (may contain slashes)" }
+        ],
+        "responses": {
+          "204": { "description": "Object deleted" },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0101` Token version revoked | `STOR-0102` Missing or invalid authorization header | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project | `STOR-0109` Authentication required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | `STOR-0201` Bucket not found | `STOR-0202` Object not found | `STOR-0203` Not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STOR-0500` Storage service temporarily unavailable | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/storage/{ref}/object/{bucket}": {
+      "get": {
+        "operationId": "listObjects",
+        "summary": "List objects",
+        "description": "Lists objects in a bucket with optional prefix filtering and pagination.",
+        "tags": ["Storage"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "bucket", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "prefix", "in": "query", "schema": { "type": "string" }, "description": "Filter objects by path prefix" },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/Order" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of objects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/StorageObject" } },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`SYS-0003` Invalid pagination cursor",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0101` Token version revoked | `STOR-0102` Missing or invalid authorization header | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project | `STOR-0109` Authentication required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | `STOR-0201` Bucket not found | `STOR-0203` Not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STOR-0500` Storage service temporarily unavailable | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/storage/{ref}/sign/{bucket}/{path}": {
+      "post": {
+        "operationId": "signObject",
+        "summary": "Create signed URL",
+        "description": "Generates a time-limited signed URL for an object.",
+        "tags": ["Storage"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "bucket", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "path", "in": "path", "required": true, "schema": { "type": "string" }, "allowReserved": true, "description": "Object path (may contain slashes)" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": { "signedURL": { "type": "string", "description": "Time-limited signed download URL" } }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`STOR-0001` Invalid file path",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0101` Token version revoked | `STOR-0102` Missing or invalid authorization header | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project | `STOR-0109` Authentication required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | `STOR-0201` Bucket not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STOR-0500` Storage service temporarily unavailable | `STOR-0501` Signing key unavailable",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/storage/{ref}/public/{bucket}/{path}": {
+      "get": {
+        "operationId": "downloadPublicObject",
+        "summary": "Download public object",
+        "description": "Downloads a public object. No authentication required.",
+        "tags": ["StorageBinary"],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "bucket", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "path", "in": "path", "required": true, "schema": { "type": "string" }, "allowReserved": true, "description": "Object path (may contain slashes)" }
+        ],
+        "responses": {
+          "200": {
+            "description": "File stream",
+            "content": {
+              "application/octet-stream": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            }
+          },
+          "404": {
+            "description": "Object or bucket not found (no error codes exposed for public endpoints)",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/v1/storage/{ref}/upload/resumable": {
+      "post": {
+        "operationId": "createUpload",
+        "summary": "Create resumable upload",
+        "description": "Initiates a tusd resumable upload. Returns a Location header with the upload URL.",
+        "tags": ["StorageUpload"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "Tus-Resumable", "in": "header", "required": true, "schema": { "type": "string", "enum": ["1.0.0"] } },
+          { "name": "Upload-Length", "in": "header", "required": true, "schema": { "type": "integer" }, "description": "Total file size in bytes" },
+          { "name": "Upload-Metadata", "in": "header", "schema": { "type": "string" }, "description": "Base64-encoded key-value metadata" }
+        ],
+        "responses": {
+          "201": {
+            "description": "Upload created",
+            "headers": {
+              "Location": { "schema": { "type": "string" }, "description": "Upload URL for PATCH/HEAD" },
+              "Tus-Resumable": { "schema": { "type": "string" } }
+            }
+          },
+          "400": {
+            "description": "`STOR-0000` Invalid request body | `STOR-0003` Missing required upload metadata",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0101` Token version revoked | `STOR-0102` Missing or invalid authorization header | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project | `STOR-0109` Authentication required for this operation | `STOR-0110` Missing project context",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`STOR-0111` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | `STOR-0201` Bucket not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "409": {
+            "description": "`STOR-0302` Bucket is not available for writes",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "413": {
+            "description": "`STOR-0400` Storage quota exceeded | `STOR-0401` File exceeds maximum allowed size",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "415": {
+            "description": "`STOR-0002` File type not allowed for this bucket",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STOR-0500` Storage service temporarily unavailable | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/storage/{ref}/upload/resumable/{id}": {
+      "head": {
+        "operationId": "getUploadStatus",
+        "summary": "Get upload status",
+        "description": "Returns the current upload offset and length.",
+        "tags": ["StorageUpload"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "Tus-Resumable", "in": "header", "required": true, "schema": { "type": "string", "enum": ["1.0.0"] } }
+        ],
+        "responses": {
+          "204": {
+            "description": "Upload status",
+            "headers": {
+              "Upload-Offset": { "schema": { "type": "integer" } },
+              "Upload-Length": { "schema": { "type": "integer" } },
+              "Tus-Resumable": { "schema": { "type": "string" } }
+            }
+          },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0101` Token version revoked | `STOR-0102` Missing or invalid authorization header | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project | `STOR-0109` Authentication required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | Upload not found (expired or invalid upload ID)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "uploadChunk",
+        "summary": "Upload chunk",
+        "description": "Uploads a chunk of data at the current offset.",
+        "tags": ["StorageUpload"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "Upload-Offset", "in": "header", "required": true, "schema": { "type": "integer" } },
+          { "name": "Tus-Resumable", "in": "header", "required": true, "schema": { "type": "string", "enum": ["1.0.0"] } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/offset+octet-stream": {
+              "schema": { "type": "string", "format": "binary" }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Chunk uploaded",
+            "headers": {
+              "Upload-Offset": { "schema": { "type": "integer" } },
+              "Tus-Resumable": { "schema": { "type": "string" } }
+            }
+          },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0101` Token version revoked | `STOR-0102` Missing or invalid authorization header | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project | `STOR-0109` Authentication required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | Upload not found (expired or invalid upload ID)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "409": {
+            "description": "`STOR-0301` Object already exists at this path",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "413": {
+            "description": "`STOR-0400` Storage quota exceeded | `STOR-0401` File exceeds maximum allowed size",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelUpload",
+        "summary": "Cancel upload",
+        "description": "Cancels an in-progress resumable upload.",
+        "tags": ["StorageUpload"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "Upload cancelled" },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0101` Token version revoked | `STOR-0102` Missing or invalid authorization header | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project | `STOR-0109` Authentication required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | Upload not found (expired or invalid upload ID)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/storage/{ref}/buckets": {
+      "post": {
+        "operationId": "createBucket",
+        "summary": "Create bucket",
+        "description": "Creates a new storage bucket. Requires service_role key.",
+        "tags": ["Storage"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "public": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Bucket created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/StorageBucket" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`STOR-0000` Invalid request body",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`STOR-0111` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "409": {
+            "description": "`STOR-0300` Bucket already exists",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STOR-0500` Storage service temporarily unavailable | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listBuckets",
+        "summary": "List buckets",
+        "description": "Lists storage buckets for the project.",
+        "tags": ["Storage"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/Order" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of buckets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/StorageBucket" } },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`SYS-0003` Invalid pagination cursor",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`STOR-0111` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STOR-0500` Storage service temporarily unavailable | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/storage/{ref}/buckets/{name}": {
+      "delete": {
+        "operationId": "deleteBucket",
+        "summary": "Delete bucket",
+        "description": "Deletes an empty storage bucket.",
+        "tags": ["Storage"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "name", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "Bucket deleted" },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`STOR-0111` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | `STOR-0201` Bucket not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "409": {
+            "description": "`STOR-0303` Bucket is not empty",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STOR-0500` Storage service temporarily unavailable | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateBucket",
+        "summary": "Update bucket",
+        "description": "Updates bucket settings (public flag, file size limit, allowed types).",
+        "tags": ["Storage"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "name", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "public": { "type": "boolean" },
+                  "file_size_limit": { "type": "integer", "format": "int64" },
+                  "allowed_types": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "Bucket updated" },
+          "400": {
+            "description": "`STOR-0000` Invalid request body",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`STOR-0100` Invalid or expired access token | `STOR-0103` Invalid API key | `STOR-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`STOR-0111` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STOR-0200` Project not found | `STOR-0201` Bucket not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STOR-0500` Storage service temporarily unavailable | `SYS-0601` Audit write failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/vectors/{ref}/tables": {
+      "post": {
+        "operationId": "createVectorTable",
+        "summary": "Create vector table",
+        "description": "Creates a new vector table with pgvector embedding column.",
+        "tags": ["Vectors"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "dimensions": { "type": "integer" },
+                  "metric": { "type": "string", "enum": ["cosine", "l2", "inner_product"] },
+                  "columns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["name", "type"],
+                      "properties": {
+                        "name": { "type": "string" },
+                        "type": { "type": "string" },
+                        "default": { "type": "string" }
+                      }
+                    },
+                    "description": "Additional columns"
+                  },
+                  "skip_index": { "type": "boolean", "description": "Defer HNSW index creation" },
+                  "index": {
+                    "type": "object",
+                    "properties": {
+                      "m": { "type": "integer" },
+                      "ef_construction": { "type": "integer" },
+                      "concurrent": { "type": "boolean" }
+                    },
+                    "description": "Custom HNSW index parameters"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Vector table created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/VectorTableRecord" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VEC-0020` Invalid request body | `VEC-0007` Invalid table name | `VEC-0013` Unsupported column type | `VEC-0014` Unsupported default expression | `VEC-0015` Vector dimensions exceed maximum (4096) | `VEC-0016` Invalid index parameters | `VEC-0004` Invalid distance metric (must be cosine, l2, or inner_product)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`VEC-0100` Invalid or expired access token | `VEC-0101` Token version revoked | `VEC-0102` Missing or invalid authorization header | `VEC-0103` Invalid API key | `VEC-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`VEC-0106` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`VEC-0021` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "409": {
+            "description": "`VEC-0005` Table already exists",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`VEC-0008` Internal vector operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`VEC-0001` pgvector not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listVectorTables",
+        "summary": "List vector tables",
+        "description": "Lists all vector tables in the project.",
+        "tags": ["Vectors"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of vector tables",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/VectorTableRecord" } },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`VEC-0100` Invalid or expired access token | `VEC-0101` Token version revoked | `VEC-0102` Missing or invalid authorization header | `VEC-0103` Invalid API key | `VEC-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`VEC-0106` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`VEC-0021` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`VEC-0008` Internal vector operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`VEC-0001` pgvector not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/vectors/{ref}/tables/{table}": {
+      "delete": {
+        "operationId": "deleteVectorTable",
+        "summary": "Delete vector table",
+        "description": "Drops a vector table and removes its metadata.",
+        "tags": ["Vectors"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "table", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "confirm", "in": "query", "schema": { "type": "string" }, "description": "Confirmation string" },
+          { "name": "cascade", "in": "query", "schema": { "type": "string" }, "description": "Cascade drop" }
+        ],
+        "responses": {
+          "204": { "description": "Table deleted" },
+          "400": {
+            "description": "`VEC-0007` Invalid table name | `VEC-0009` Table name confirmation mismatch",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`VEC-0100` Invalid or expired access token | `VEC-0101` Token version revoked | `VEC-0102` Missing or invalid authorization header | `VEC-0103` Invalid API key | `VEC-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`VEC-0106` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`VEC-0021` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "409": {
+            "description": "`VEC-0017` Table has dependent objects (include cascade=true to force drop)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`VEC-0008` Internal vector operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`VEC-0001` pgvector not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/vectors/{ref}/{table}/search": {
+      "post": {
+        "operationId": "searchVectors",
+        "summary": "Search vectors",
+        "description": "Performs similarity search on a vector table.",
+        "tags": ["Vectors"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "table", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["vector"],
+                "properties": {
+                  "vector": { "type": "array", "items": { "type": "number", "format": "float" }, "description": "Query embedding vector" },
+                  "limit": { "type": "integer" },
+                  "threshold": { "type": "number", "description": "Minimum similarity score" },
+                  "metric": { "type": "string", "enum": ["cosine", "l2", "inner_product"], "description": "Override table default metric" },
+                  "select": { "type": "array", "items": { "type": "string" }, "description": "Columns to return" },
+                  "filter": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Column filters" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results with similarity scores",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": { "similarity": { "type": "number" } },
+                        "additionalProperties": true,
+                        "description": "Row data with similarity score"
+                      }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VEC-0020` Invalid request body | `VEC-0006` Invalid vector | `VEC-0003` Query vector length does not match table dimensions | `VEC-0004` Invalid distance metric (must be cosine, l2, or inner_product) | `VEC-0007` Invalid table name | `VEC-0010` No vector column found in table | `VEC-0011` Unknown column in select list | `VEC-0012` Unsupported filter operator | `VEC-0018` Unable to determine distance metric - no index found and no metric specified in request",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`VEC-0100` Invalid or expired access token | `VEC-0101` Token version revoked | `VEC-0102` Missing or invalid authorization header | `VEC-0103` Invalid API key | `VEC-0104` API key does not belong to this project | `VEC-0105` Authentication required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`VEC-0021` Project not found | `VEC-0002` Vector table not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`VEC-0008` Internal vector operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`VEC-0001` pgvector not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/vectors/{ref}/{table}/index": {
+      "post": {
+        "operationId": "createVectorIndex",
+        "summary": "Create vector index",
+        "description": "Creates an HNSW index on a vector table.",
+        "tags": ["Vectors"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "table", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "m": { "type": "integer", "description": "HNSW M parameter" },
+                  "ef_construction": { "type": "integer", "description": "HNSW ef_construction parameter" },
+                  "concurrent": { "type": "boolean", "description": "Build index concurrently" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Index created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": { "status": { "type": "string" } }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VEC-0020` Invalid request body | `VEC-0007` Invalid table name | `VEC-0016` Invalid index parameters | `VEC-0004` Invalid distance metric (must be cosine, l2, or inner_product)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`VEC-0100` Invalid or expired access token | `VEC-0101` Token version revoked | `VEC-0102` Missing or invalid authorization header | `VEC-0103` Invalid API key | `VEC-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`VEC-0106` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`VEC-0021` Project not found | `VEC-0002` Vector table not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`VEC-0008` Internal vector operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "501": {
+            "description": "`VEC-0019` Concurrent index creation not yet supported",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`VEC-0001` pgvector not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/stats/{ref}/queries": {
+      "get": {
+        "operationId": "listQueryStats",
+        "summary": "List query statistics",
+        "description": "Returns pg_stat_statements query statistics for the project.",
+        "tags": ["Stats"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "order_by", "in": "query", "schema": { "type": "string", "enum": ["total_time", "mean_time", "calls", "rows"], "default": "total_time" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Query statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "queries": { "type": "array", "items": { "$ref": "#/components/schemas/QueryStat" } },
+                        "total_queries": { "type": "integer", "description": "Total number of distinct queries tracked" },
+                        "stats_reset": { "type": "string", "description": "Timestamp when statistics were last reset. May be null if stats have never been reset." }
+                      }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`STAT-0003` Invalid order_by parameter (must be total_time, mean_time, calls, or rows) | `STAT-0004` Invalid limit parameter",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`STAT-0100` Invalid or expired access token | `STAT-0101` Token version revoked | `STAT-0102` Missing or invalid authorization header | `STAT-0103` Invalid API key | `STAT-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`STAT-0105` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`STAT-0002` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`STAT-0005` Internal query statistics error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`STAT-0001` pg_stat_statements not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/cron/{ref}/jobs": {
+      "post": {
+        "operationId": "createCronJob",
+        "summary": "Create cron job",
+        "description": "Schedules a new cron job via pg_cron.",
+        "tags": ["Cron"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "schedule", "command"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "schedule": { "type": "string", "description": "Cron expression" },
+                  "command": { "type": "string", "description": "SQL command to execute" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Job created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/CronJob" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`CRON-0018` Invalid request body | `CRON-0013` Invalid job name (alphanumeric, underscore, hyphen, 1-128 chars) | `CRON-0003` Invalid cron schedule expression | `CRON-0004` Schedule interval below minimum allowed | `CRON-0005` SQL command exceeds maximum length | `CRON-0006` SQL command contains denied pattern",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`CRON-0010` Invalid or expired access token | `CRON-0015` Token version revoked | `CRON-0016` Missing or invalid authorization header | `CRON-0011` Invalid API key | `CRON-0017` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`CRON-0012` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`CRON-0002` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "409": {
+            "description": "`CRON-0007` Job limit reached for this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`CRON-0014` Internal cron operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`CRON-0001` pg_cron not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listCronJobs",
+        "summary": "List cron jobs",
+        "description": "Lists all cron jobs for the project.",
+        "tags": ["Cron"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job list with limits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "jobs": { "type": "array", "items": { "$ref": "#/components/schemas/CronJob" } },
+                        "total": { "type": "integer" },
+                        "max_allowed": { "type": "integer" }
+                      }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`CRON-0010` Invalid or expired access token | `CRON-0015` Token version revoked | `CRON-0016` Missing or invalid authorization header | `CRON-0011` Invalid API key | `CRON-0017` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`CRON-0012` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`CRON-0002` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`CRON-0014` Internal cron operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`CRON-0001` pg_cron not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/cron/{ref}/jobs/{id}": {
+      "get": {
+        "operationId": "getCronJob",
+        "summary": "Get cron job",
+        "description": "Retrieves a specific cron job by ID.",
+        "tags": ["Cron"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/CronJob" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`CRON-0010` Invalid or expired access token | `CRON-0015` Token version revoked | `CRON-0016` Missing or invalid authorization header | `CRON-0011` Invalid API key | `CRON-0017` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`CRON-0012` Service role required for this operation | `CRON-0009` Job belongs to a different project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`CRON-0002` Project not found | `CRON-0008` Job not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`CRON-0014` Internal cron operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`CRON-0001` pg_cron not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateCronJob",
+        "summary": "Update cron job",
+        "description": "Updates a cron job's schedule, command, or active state.",
+        "tags": ["Cron"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "schedule": { "type": "string" },
+                  "command": { "type": "string" },
+                  "active": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/CronJob" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`CRON-0018` Invalid request body | `CRON-0003` Invalid cron schedule expression | `CRON-0004` Schedule interval below minimum allowed | `CRON-0005` SQL command exceeds maximum length | `CRON-0006` SQL command contains denied pattern",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`CRON-0010` Invalid or expired access token | `CRON-0015` Token version revoked | `CRON-0016` Missing or invalid authorization header | `CRON-0011` Invalid API key | `CRON-0017` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`CRON-0012` Service role required for this operation | `CRON-0009` Job belongs to a different project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`CRON-0002` Project not found | `CRON-0008` Job not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`CRON-0014` Internal cron operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`CRON-0001` pg_cron not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCronJob",
+        "summary": "Delete cron job",
+        "description": "Removes a cron job.",
+        "tags": ["Cron"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+        ],
+        "responses": {
+          "204": { "description": "Job deleted" },
+          "401": {
+            "description": "`CRON-0010` Invalid or expired access token | `CRON-0015` Token version revoked | `CRON-0016` Missing or invalid authorization header | `CRON-0011` Invalid API key | `CRON-0017` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`CRON-0012` Service role required for this operation | `CRON-0009` Job belongs to a different project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`CRON-0002` Project not found | `CRON-0008` Job not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`CRON-0014` Internal cron operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`CRON-0001` pg_cron not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/cron/{ref}/jobs/{id}/history": {
+      "get": {
+        "operationId": "getCronJobHistory",
+        "summary": "Get cron job history",
+        "description": "Returns execution history for a cron job.",
+        "tags": ["Cron"],
+        "security": [{ "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Execution history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "history": { "type": "array", "items": { "$ref": "#/components/schemas/CronJobHistory" } },
+                        "total": { "type": "integer" }
+                      }
+                    },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`CRON-0010` Invalid or expired access token | `CRON-0015` Token version revoked | `CRON-0016` Missing or invalid authorization header | `CRON-0011` Invalid API key | `CRON-0017` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`CRON-0012` Service role required for this operation | `CRON-0009` Job belongs to a different project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`CRON-0002` Project not found | `CRON-0008` Job not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`CRON-0014` Internal cron operation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`CRON-0001` pg_cron not enabled on this deployment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/introspect/{ref}/tables": {
+      "get": {
+        "operationId": "listTables",
+        "summary": "List tables",
+        "description": "List all user tables in the project with metadata (row estimate, size, comment).",
+        "tags": ["Introspect"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Table list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/TableSummary" } },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`INTRO-0100` Invalid or expired access token | `INTRO-0101` Token version revoked | `INTRO-0102` Missing or invalid authorization header | `INTRO-0103` Invalid API key | `INTRO-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`INTRO-0105` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`INTRO-0106` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`INTRO-0004` Database pool overloaded | `SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/introspect/{ref}/tables/{table}": {
+      "get": {
+        "operationId": "getTableDetail",
+        "summary": "Get table detail",
+        "description": "Get full schema detail for a table including columns, constraints, and indexes.",
+        "tags": ["Introspect"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" },
+          { "name": "table", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Table name" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Table detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/TableDetail" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`INTRO-0100` Invalid or expired access token | `INTRO-0101` Token version revoked | `INTRO-0102` Missing or invalid authorization header | `INTRO-0103` Invalid API key | `INTRO-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`INTRO-0105` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`INTRO-0106` Project not found | `INTRO-0002` Table not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`INTRO-0004` Database pool overloaded | `SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/sql/{ref}/execute": {
+      "post": {
+        "operationId": "executeSQL",
+        "summary": "Execute SQL",
+        "description": "Execute a SQL query against the project database with statement timeout enforcement.",
+        "tags": ["SQL"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ExecuteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Query result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "error", "meta"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/ExecuteResult" },
+                    "error": { "description": "Always null for success responses" },
+                    "meta": { "$ref": "#/components/schemas/Meta" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`SQL-0002` Query is empty | `SQL-0003` Query exceeds maximum size | `SQL-0007` Invalid request body",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "401": {
+            "description": "`SQL-0100` Invalid or expired access token | `SQL-0101` Token version revoked | `SQL-0102` Missing or invalid authorization header | `SQL-0103` Invalid API key | `SQL-0104` API key does not belong to this project",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "403": {
+            "description": "`SQL-0105` Service role required for this operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "408": {
+            "description": "`SQL-0005` Statement timeout exceeded",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "500": {
+            "description": "`SQL-0004` SQL execution failed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`SQL-0008` Database pool overloaded | `SYS-0700` Server is temporarily overloaded, please retry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/realtime/{ref}": {
+      "get": {
+        "operationId": "realtimeConnect",
+        "summary": "WebSocket connection",
+        "description": "Upgrades to a WebSocket connection for realtime database change notifications. Supports Bearer JWT, apikey header/query param, or anonymous (defaults to anon role). WebSocket protocol errors (RT-0000 through RT-0007) are delivered as JSON messages over the connection, not as HTTP responses.",
+        "tags": ["Realtime"],
+        "security": [{ "ProjectJWT": [] }, { "ServiceRoleKey": [] }, { "AnonKey": [] }, {}],
+        "parameters": [
+          { "$ref": "#/components/parameters/ProjectRef" }
+        ],
+        "responses": {
+          "101": {
+            "description": "Switching Protocols - WebSocket upgrade",
+            "headers": {
+              "Upgrade": { "schema": { "type": "string" } },
+              "Connection": { "schema": { "type": "string" } }
+            }
+          },
+          "401": {
+            "description": "`RT-0100` Invalid or expired access token | `RT-0101` Token version revoked | `RT-0102` Invalid API key | `RT-0103` API key does not belong to this project | `RT-0104` Authorization header must use Bearer scheme | `RT-0105` Unrecognized JWT role",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "404": {
+            "description": "`RT-0200` Project not found | `RT-0201` Project not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          },
+          "503": {
+            "description": "`RT-0300` Connection limit reached",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+          }
+        }
+      }
+    },
+    "/v1/openapi.json": {
+      "get": {
+        "operationId": "getOpenAPISpec",
+        "summary": "OpenAPI specification",
+        "description": "Returns this OpenAPI 3.1 specification document as JSON.",
+        "tags": ["Health"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1 specification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "OpenAPI 3.1 specification document"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Liveness probe",
+        "description": "Static 200 liveness probe. Returns {\"status\":\"ok\"} if the process is running. Does not check dependencies.",
+        "tags": ["Health"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status"],
+                  "properties": {
+                    "status": { "type": "string", "enum": ["ok"] }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "readinessCheck",
+        "summary": "Readiness probe",
+        "description": "Runs dependency health checks (database, cache, sidecars) with a 2-second timeout. Hard check failures return 503; soft check failures return 200 with 'degraded' status per check.",
+        "tags": ["Health"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is ready (all hard checks passed). Soft checks may report degraded status.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReadinessResponse" }
+              }
+            }
+          },
+          "503": {
+            "description": "Service is not ready (one or more hard checks failed)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReadinessResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable error code in DOMAIN-NNNN format",
+            "example": "AUTH-0100"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message",
+            "example": "Invalid credentials"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Optional additional context"
+          }
+        }
+      },
+      "Meta": {
+        "type": "object",
+        "required": ["request_id"],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique request identifier for tracing"
+          }
+        }
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "required": ["request_id", "next_cursor", "has_more"],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Cursor for the next page. Empty string when no more results."
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether more results exist beyond this page"
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "description": "Standard error response envelope. Used by shared error responses (400, 401, etc.).",
+        "required": ["data", "error", "meta"],
+        "properties": {
+          "data": { "description": "Always null for error responses" },
+          "error": { "$ref": "#/components/schemas/ApiError" },
+          "meta": { "$ref": "#/components/schemas/Meta" }
+        }
+      },
+      "Organization": {
+        "type": "object",
+        "description": "An organization that owns one or more projects.",
+        "required": ["id", "name", "slug", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "description": "A project with its own database schema, API keys, and configuration.",
+        "required": ["id", "org_id", "ref", "name", "schema_name", "region", "status", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "org_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "ref": { "type": "string", "description": "Project reference slug" },
+          "schema_name": { "type": "string" },
+          "region": { "type": "string" },
+          "status": { "type": "string", "enum": ["active", "paused", "deleted"] },
+          "settings": { "type": "object", "description": "Project-specific settings" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AuthUser": {
+        "type": "object",
+        "description": "Authenticated user profile.",
+        "required": ["id", "email_confirmed", "phone_confirmed", "token_version", "app_metadata", "user_metadata", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "phone": { "type": "string" },
+          "display_name": { "type": "string" },
+          "avatar_url": { "type": "string" },
+          "email_confirmed": { "type": "boolean" },
+          "phone_confirmed": { "type": "boolean" },
+          "token_version": { "type": "integer" },
+          "app_metadata": { "type": "object" },
+          "user_metadata": { "type": "object" },
+          "banned_until": { "type": "string", "format": "date-time" },
+          "last_sign_in_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "description": "Token response returned by signup and login.",
+        "properties": {
+          "access_token": { "type": "string" },
+          "refresh_token": { "type": "string" },
+          "expires_in": { "type": "integer", "description": "Token TTL in seconds" },
+          "user": { "$ref": "#/components/schemas/AuthUser" }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "description": "An active user session.",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "user_id": { "type": "string", "format": "uuid" },
+          "ip_address": { "type": "string" },
+          "user_agent": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "last_seen_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "VectorTableRecord": {
+        "type": "object",
+        "description": "Metadata record for a vector table.",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "project_id": { "type": "string", "format": "uuid" },
+          "schema_name": { "type": "string" },
+          "table_name": { "type": "string" },
+          "dimensions": { "type": "integer" },
+          "metric": { "type": "string", "enum": ["cosine", "l2", "inner_product"] },
+          "index_type": { "type": "string", "description": "Index type (e.g. hnsw)" },
+          "index_m": { "type": "integer", "description": "HNSW M parameter" },
+          "index_ef_construction": { "type": "integer", "description": "HNSW ef_construction parameter" },
+          "scoping_column": { "type": "string", "description": "Optional tenant scoping column" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "QueryStat": {
+        "type": "object",
+        "description": "Query statistics from pg_stat_statements.",
+        "properties": {
+          "queryid": { "type": "integer", "format": "int64" },
+          "query": { "type": "string" },
+          "calls": { "type": "integer", "format": "int64" },
+          "total_exec_time_ms": { "type": "number" },
+          "mean_exec_time_ms": { "type": "number" },
+          "min_exec_time_ms": { "type": "number" },
+          "max_exec_time_ms": { "type": "number" },
+          "rows": { "type": "integer", "format": "int64" },
+          "shared_blks_hit": { "type": "integer", "format": "int64" },
+          "shared_blks_read": { "type": "integer", "format": "int64" }
+        }
+      },
+      "CronJob": {
+        "type": "object",
+        "description": "A scheduled cron job managed by pg_cron.",
+        "required": ["id", "name", "schedule", "command", "active", "database", "created_at"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "schedule": { "type": "string", "description": "Cron expression" },
+          "command": { "type": "string" },
+          "active": { "type": "boolean" },
+          "database": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CronJobHistory": {
+        "type": "object",
+        "description": "Execution history entry for a cron job.",
+        "required": ["run_id", "job_id", "database", "command", "status", "return_message"],
+        "properties": {
+          "run_id": { "type": "integer", "format": "int64" },
+          "job_id": { "type": "integer", "format": "int64" },
+          "database": { "type": "string" },
+          "command": { "type": "string" },
+          "status": { "type": "string" },
+          "return_message": { "type": "string" },
+          "start_time": { "type": "string", "format": "date-time", "description": "May be null if the job has not started yet." },
+          "end_time": { "type": "string", "format": "date-time", "description": "May be null if the job has not completed yet." }
+        }
+      },
+      "StorageBucket": {
+        "type": "object",
+        "description": "A storage bucket that holds objects.",
+        "required": ["id", "project_id", "name", "public", "created_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "project_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "public": { "type": "boolean" },
+          "file_size_limit": { "type": "integer", "format": "int64", "description": "Maximum file size in bytes" },
+          "allowed_types": { "type": "array", "items": { "type": "string" }, "description": "Allowed MIME types" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "StorageObject": {
+        "type": "object",
+        "description": "A file stored in a storage bucket.",
+        "required": ["id", "bucket_id", "path", "size", "content_type", "etag", "metadata", "status", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "bucket_id": { "type": "string", "format": "uuid" },
+          "path": { "type": "string" },
+          "size": { "type": "integer", "format": "int64" },
+          "declared_size": { "type": "integer", "format": "int64", "description": "Declared size from upload metadata" },
+          "content_type": { "type": "string" },
+          "etag": { "type": "string" },
+          "metadata": { "type": "string", "description": "Base64-encoded user-provided upload metadata (raw JSON bytes)" },
+          "owner_id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["pending", "active", "deleted"] },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "APIKeyWithSecret": {
+        "type": "object",
+        "description": "API key with raw secret. Returned only at creation time - the raw_key is shown once and never stored.",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "project_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string", "description": "Key name: anon or service_role" },
+          "key_prefix": { "type": "string", "description": "First 8 hex chars for identification" },
+          "role": { "type": "string", "description": "PostgreSQL role this key maps to" },
+          "expires_at": { "type": "string", "format": "date-time", "description": "Optional expiration timestamp" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "raw_key": { "type": "string", "description": "Full API key (shown once)" }
+        }
+      },
+      "ProjectWithKeys": {
+        "type": "object",
+        "description": "Project details including API keys. Returned only at creation time - keys are shown once.",
+        "properties": {
+          "project": { "$ref": "#/components/schemas/Project" },
+          "anon_key": { "$ref": "#/components/schemas/APIKeyWithSecret" },
+          "service_role_key": { "$ref": "#/components/schemas/APIKeyWithSecret" },
+          "db_connection_string": { "type": "string", "description": "Pooled connection string (shown once, omitted in service_role pooling mode)" }
+        }
+      },
+      "ReadinessResponse": {
+        "type": "object",
+        "description": "Readiness probe response with per-dependency check results.",
+        "required": ["status", "checks"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ready", "not_ready"],
+            "description": "Overall readiness status. 'not_ready' when any hard check fails."
+          },
+          "checks": {
+            "type": "object",
+            "description": "Per-dependency check results keyed by dependency name (e.g. 'database', 'cache', 'postgrest').",
+            "additionalProperties": { "$ref": "#/components/schemas/CheckResult" }
+          }
+        }
+      },
+      "CheckResult": {
+        "type": "object",
+        "description": "Individual dependency check result.",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok", "error", "degraded"],
+            "description": "Check status: 'ok' = healthy, 'error' = hard check failed (gates 503), 'degraded' = soft check failed (informational only)."
+          },
+          "message": {
+            "type": "string",
+            "description": "Sanitized error message. Only present when status is not 'ok'."
+          }
+        }
+      },
+      "TableSummary": {
+        "type": "object",
+        "description": "Summary metadata for a database table.",
+        "required": ["name", "schema", "row_estimate", "size_bytes"],
+        "properties": {
+          "name": { "type": "string" },
+          "schema": { "type": "string" },
+          "row_estimate": { "type": "integer", "format": "int64" },
+          "size_bytes": { "type": "integer", "format": "int64" },
+          "comment": { "type": "string", "nullable": true }
+        }
+      },
+      "TableDetail": {
+        "type": "object",
+        "description": "Full schema detail for a database table including columns, constraints, and indexes.",
+        "required": ["name", "schema", "columns", "primary_key", "foreign_keys", "indexes", "row_estimate", "size_bytes"],
+        "properties": {
+          "name": { "type": "string" },
+          "schema": { "type": "string" },
+          "columns": { "type": "array", "items": { "$ref": "#/components/schemas/Column" } },
+          "primary_key": { "type": "array", "items": { "type": "string" } },
+          "foreign_keys": { "type": "array", "items": { "$ref": "#/components/schemas/ForeignKey" } },
+          "indexes": { "type": "array", "items": { "$ref": "#/components/schemas/TableIndex" } },
+          "row_estimate": { "type": "integer", "format": "int64" },
+          "size_bytes": { "type": "integer", "format": "int64" },
+          "comment": { "type": "string", "nullable": true }
+        }
+      },
+      "Column": {
+        "type": "object",
+        "description": "Column definition within a table.",
+        "required": ["name", "type", "nullable", "is_primary_key", "ordinal_position"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "nullable": { "type": "boolean" },
+          "default_value": { "type": "string", "nullable": true },
+          "is_primary_key": { "type": "boolean" },
+          "comment": { "type": "string", "nullable": true },
+          "ordinal_position": { "type": "integer" }
+        }
+      },
+      "ForeignKey": {
+        "type": "object",
+        "description": "Foreign key constraint on a table.",
+        "required": ["name", "columns", "foreign_schema", "foreign_table", "foreign_columns"],
+        "properties": {
+          "name": { "type": "string" },
+          "columns": { "type": "array", "items": { "type": "string" } },
+          "foreign_schema": { "type": "string" },
+          "foreign_table": { "type": "string" },
+          "foreign_columns": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "TableIndex": {
+        "type": "object",
+        "description": "Index on a table.",
+        "required": ["name", "columns", "is_unique", "is_primary", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "columns": { "type": "array", "items": { "type": "string" } },
+          "is_unique": { "type": "boolean" },
+          "is_primary": { "type": "boolean" },
+          "type": { "type": "string" }
+        }
+      },
+      "ExecuteRequest": {
+        "type": "object",
+        "description": "SQL query execution request.",
+        "required": ["query"],
+        "properties": {
+          "query": { "type": "string" },
+          "params": { "type": "array", "items": {} }
+        }
+      },
+      "ExecuteResult": {
+        "type": "object",
+        "description": "Result of a SQL query execution.",
+        "required": ["columns", "rows", "row_count", "execution_time_ms", "command_tag"],
+        "properties": {
+          "columns": { "type": "array", "items": { "$ref": "#/components/schemas/ResultColumn" } },
+          "rows": { "type": "array", "items": { "type": "object" } },
+          "row_count": { "type": "integer" },
+          "execution_time_ms": { "type": "number" },
+          "command_tag": { "type": "string" }
+        }
+      },
+      "ResultColumn": {
+        "type": "object",
+        "description": "Column metadata from a SQL query result.",
+        "required": ["name", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string" }
+        }
+      }
+    },
+    "securitySchemes": {
+      "AdminBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Platform admin secret token. Required for /v1/platform/* routes."
+      },
+      "ProjectJWT": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Project-scoped JWT issued by POST /v1/auth/{ref}/token."
+      },
+      "AnonKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "apikey",
+        "description": "Project anon API key. Grants unauthenticated access subject to RLS policies."
+      },
+      "ServiceRoleKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "apikey",
+        "description": "Project service_role API key. Bypasses RLS. Required for admin operations (bucket CRUD, cron, vectors, stats)."
+      }
+    },
+    "parameters": {
+      "ProjectRef": {
+        "name": "ref",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "Project reference slug (resolved to project ID server-side)"
+      },
+      "OrgID": {
+        "name": "orgID",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" },
+        "description": "Organization UUID"
+      },
+      "ProjectID": {
+        "name": "projectID",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" },
+        "description": "Project UUID"
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "schema": { "type": "string" },
+        "description": "Keyset pagination cursor (UUID of last item)"
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 25 },
+        "description": "Maximum number of results per page"
+      },
+      "Order": {
+        "name": "order",
+        "in": "query",
+        "schema": { "type": "string", "enum": ["asc", "desc"], "default": "asc" },
+        "description": "Sort order"
+      }
+    },
+    "responses": {
+      "TooManyRequests": {
+        "description": "`RATE-0400` Rate limit exceeded",
+        "headers": {
+          "Retry-After": {
+            "schema": { "type": "integer" },
+            "description": "Seconds to wait before retrying"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+          }
+        }
+      }
+    }
+  }
+}
