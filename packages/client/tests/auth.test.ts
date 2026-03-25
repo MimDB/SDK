@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AuthClient } from '../src/auth'
 import { InMemoryTokenStore } from '../src/auth-store'
-import { mockFetch } from './helpers'
+import { envelope, mockFetch, mockFetchNoContent } from './helpers'
 
 const URL = 'https://api.mimdb.dev'
 const REF = 'abc123'
@@ -35,7 +35,7 @@ function createAuth(fetchFn: typeof fetch, store?: InMemoryTokenStore): AuthClie
 describe('AuthClient', () => {
   describe('signUp', () => {
     it('sends correct POST to /signup and stores tokens', async () => {
-      const fetchFn = mockFetch(200, { user: MOCK_USER, ...MOCK_TOKENS })
+      const fetchFn = mockFetch(201, envelope({ user: MOCK_USER, ...MOCK_TOKENS }))
       const store = new InMemoryTokenStore()
       const auth = createAuth(fetchFn, store)
 
@@ -63,7 +63,7 @@ describe('AuthClient', () => {
     })
 
     it('sends user_metadata when provided', async () => {
-      const fetchFn = mockFetch(200, { user: MOCK_USER, ...MOCK_TOKENS })
+      const fetchFn = mockFetch(201, envelope({ user: MOCK_USER, ...MOCK_TOKENS }))
       const auth = createAuth(fetchFn)
 
       await auth.signUp('test@example.com', 'password', {
@@ -76,7 +76,7 @@ describe('AuthClient', () => {
     })
 
     it('fires SIGNED_IN event', async () => {
-      const fetchFn = mockFetch(200, { user: MOCK_USER, ...MOCK_TOKENS })
+      const fetchFn = mockFetch(201, envelope({ user: MOCK_USER, ...MOCK_TOKENS }))
       const auth = createAuth(fetchFn)
       const listener = vi.fn()
       auth.onAuthStateChange(listener)
@@ -91,8 +91,8 @@ describe('AuthClient', () => {
   })
 
   describe('signIn', () => {
-    it('sends correct POST to /token with grant_type password', async () => {
-      const fetchFn = mockFetch(200, { user: MOCK_USER, ...MOCK_TOKENS })
+    it('sends correct POST to /token with grant_type as query param', async () => {
+      const fetchFn = mockFetch(200, envelope({ user: MOCK_USER, ...MOCK_TOKENS }))
       const store = new InMemoryTokenStore()
       const auth = createAuth(fetchFn, store)
 
@@ -104,12 +104,12 @@ describe('AuthClient', () => {
       const call = vi.mocked(fetchFn).mock.calls[0]!
       const url = call[0] as string
       const init = call[1] as RequestInit
-      expect(url).toBe(`${URL}/v1/auth/${REF}/token`)
+      expect(url).toBe(`${URL}/v1/auth/${REF}/token?grant_type=password`)
       expect(init.method).toBe('POST')
+      // grant_type should NOT be in the body
       expect(JSON.parse(init.body as string)).toEqual({
         email: 'test@example.com',
         password: 'password123',
-        grant_type: 'password',
       })
 
       expect(store.get()).toEqual({
@@ -119,7 +119,7 @@ describe('AuthClient', () => {
     })
 
     it('fires SIGNED_IN event', async () => {
-      const fetchFn = mockFetch(200, { user: MOCK_USER, ...MOCK_TOKENS })
+      const fetchFn = mockFetch(200, envelope({ user: MOCK_USER, ...MOCK_TOKENS }))
       const auth = createAuth(fetchFn)
       const listener = vi.fn()
       auth.onAuthStateChange(listener)
@@ -133,7 +133,19 @@ describe('AuthClient', () => {
     })
 
     it('throws MimDBError on failed sign-in', async () => {
-      const fetchFn = mockFetch(401, { message: 'Invalid credentials', code: 'AUTH_INVALID' })
+      const fetchFn = mockFetch(401, envelope(null))
+      // Override with an error envelope
+      vi.mocked(fetchFn).mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          data: null,
+          error: { code: 'AUTH-0300', message: 'Invalid credentials' },
+          meta: { request_id: 'test' },
+        }), {
+          status: 401,
+          statusText: 'Unauthorized',
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
       const auth = createAuth(fetchFn)
 
       await expect(auth.signIn('bad@example.com', 'wrong'))
@@ -143,16 +155,16 @@ describe('AuthClient', () => {
   })
 
   describe('signOut', () => {
-    it('sends POST to /logout and clears tokens', async () => {
-      const signInFetch = mockFetch(200, { user: MOCK_USER, ...MOCK_TOKENS })
+    it('sends POST to /logout with refresh_token and clears tokens', async () => {
+      const signInFetch = mockFetch(200, envelope({ user: MOCK_USER, ...MOCK_TOKENS }))
       const store = new InMemoryTokenStore()
       const auth = createAuth(signInFetch, store)
 
       await auth.signIn('test@example.com', 'password')
       expect(store.get()).not.toBeNull()
 
-      // Replace fetch for sign out
-      const signOutFetch = mockFetch(200, null)
+      // Replace fetch for sign out (204 No Content)
+      const signOutFetch = mockFetchNoContent()
       const auth2 = createAuth(signOutFetch, store)
 
       await auth2.signOut()
@@ -163,11 +175,15 @@ describe('AuthClient', () => {
       expect(url).toBe(`${URL}/v1/auth/${REF}/logout`)
       expect(init.method).toBe('POST')
 
+      // Must send refresh_token in body for server-side revocation
+      const body = JSON.parse(init.body as string)
+      expect(body.refresh_token).toBe('refresh-token-456')
+
       expect(store.get()).toBeNull()
     })
 
     it('fires SIGNED_OUT event', async () => {
-      const fetchFn = mockFetch(200, null)
+      const fetchFn = mockFetchNoContent()
       const auth = createAuth(fetchFn)
       const listener = vi.fn()
       auth.onAuthStateChange(listener)
@@ -181,7 +197,7 @@ describe('AuthClient', () => {
       const store = new InMemoryTokenStore()
       store.set('user-access-token', 'user-refresh-token')
 
-      const fetchFn = mockFetch(200, null)
+      const fetchFn = mockFetchNoContent()
       const auth = createAuth(fetchFn, store)
 
       await auth.signOut()
@@ -194,7 +210,7 @@ describe('AuthClient', () => {
   })
 
   describe('refreshSession', () => {
-    it('sends correct POST with refresh_token and grant_type', async () => {
+    it('sends correct POST with refresh_token and grant_type as query param', async () => {
       const store = new InMemoryTokenStore()
       store.set('old-access', 'old-refresh')
 
@@ -203,7 +219,7 @@ describe('AuthClient', () => {
         refresh_token: 'new-refresh',
         expires_in: 7200,
       }
-      const fetchFn = mockFetch(200, newTokens)
+      const fetchFn = mockFetch(200, envelope(newTokens))
       const auth = createAuth(fetchFn, store)
 
       const result = await auth.refreshSession()
@@ -213,10 +229,10 @@ describe('AuthClient', () => {
       const call = vi.mocked(fetchFn).mock.calls[0]!
       const url = call[0] as string
       const init = call[1] as RequestInit
-      expect(url).toBe(`${URL}/v1/auth/${REF}/token`)
+      expect(url).toBe(`${URL}/v1/auth/${REF}/token?grant_type=refresh_token`)
+      // grant_type should NOT be in the body
       expect(JSON.parse(init.body as string)).toEqual({
         refresh_token: 'old-refresh',
-        grant_type: 'refresh_token',
       })
 
       expect(store.get()).toEqual({
@@ -226,7 +242,7 @@ describe('AuthClient', () => {
     })
 
     it('uses explicit refresh token when provided', async () => {
-      const fetchFn = mockFetch(200, MOCK_TOKENS)
+      const fetchFn = mockFetch(200, envelope(MOCK_TOKENS))
       const auth = createAuth(fetchFn)
 
       await auth.refreshSession('explicit-refresh-token')
@@ -240,7 +256,7 @@ describe('AuthClient', () => {
       const store = new InMemoryTokenStore()
       store.set('old-access', 'old-refresh')
 
-      const fetchFn = mockFetch(200, MOCK_TOKENS)
+      const fetchFn = mockFetch(200, envelope(MOCK_TOKENS))
       const auth = createAuth(fetchFn, store)
       const listener = vi.fn()
       auth.onAuthStateChange(listener)
@@ -254,7 +270,7 @@ describe('AuthClient', () => {
     })
 
     it('throws when no refresh token is available', async () => {
-      const fetchFn = mockFetch(200, MOCK_TOKENS)
+      const fetchFn = mockFetch(200, envelope(MOCK_TOKENS))
       const auth = createAuth(fetchFn)
 
       await expect(auth.refreshSession())
@@ -264,11 +280,11 @@ describe('AuthClient', () => {
   })
 
   describe('getUser', () => {
-    it('sends GET with access token in Authorization header', async () => {
+    it('sends GET with access token and parses envelope', async () => {
       const store = new InMemoryTokenStore()
       store.set('my-access-token', 'my-refresh')
 
-      const fetchFn = mockFetch(200, MOCK_USER)
+      const fetchFn = mockFetch(200, envelope(MOCK_USER))
       const auth = createAuth(fetchFn, store)
 
       const user = await auth.getUser()
@@ -285,7 +301,11 @@ describe('AuthClient', () => {
     })
 
     it('throws on API error', async () => {
-      const fetchFn = mockFetch(401, { message: 'Unauthorized', code: 'AUTH01' })
+      const fetchFn = mockFetch(401, {
+        data: null,
+        error: { code: 'AUTH-0200', message: 'Unauthorized' },
+        meta: { request_id: 'test' },
+      })
       const auth = createAuth(fetchFn)
 
       await expect(auth.getUser()).rejects.toThrow('Unauthorized')
@@ -293,12 +313,12 @@ describe('AuthClient', () => {
   })
 
   describe('updateUser', () => {
-    it('sends PUT with user_metadata', async () => {
+    it('sends PUT with user_metadata and parses envelope', async () => {
       const store = new InMemoryTokenStore()
       store.set('my-access', 'my-refresh')
 
       const updatedUser = { ...MOCK_USER, user_metadata: { theme: 'dark' } }
-      const fetchFn = mockFetch(200, updatedUser)
+      const fetchFn = mockFetch(200, envelope(updatedUser))
       const auth = createAuth(fetchFn, store)
 
       const result = await auth.updateUser({ userMetadata: { theme: 'dark' } })
@@ -378,6 +398,19 @@ describe('AuthClient', () => {
       })
     })
 
+    it('returns error result for error fragments', () => {
+      const auth = createAuth(mockFetch(200, null))
+
+      const result = auth.handleOAuthCallback(
+        '#error=access_denied&error_description=User+denied+consent',
+      )
+
+      expect(result).toEqual({
+        error: 'access_denied',
+        errorDescription: 'User denied consent',
+      })
+    })
+
     it('returns null for missing access_token', () => {
       const auth = createAuth(mockFetch(200, null))
 
@@ -448,7 +481,7 @@ describe('AuthClient', () => {
 
   describe('onAuthStateChange', () => {
     it('fires on signIn', async () => {
-      const fetchFn = mockFetch(200, { user: MOCK_USER, ...MOCK_TOKENS })
+      const fetchFn = mockFetch(200, envelope({ user: MOCK_USER, ...MOCK_TOKENS }))
       const auth = createAuth(fetchFn)
       const events: string[] = []
       auth.onAuthStateChange((event) => events.push(event))
@@ -459,7 +492,7 @@ describe('AuthClient', () => {
     })
 
     it('fires on signOut', async () => {
-      const fetchFn = mockFetch(200, null)
+      const fetchFn = mockFetchNoContent()
       const auth = createAuth(fetchFn)
       const events: string[] = []
       auth.onAuthStateChange((event) => events.push(event))
@@ -473,7 +506,7 @@ describe('AuthClient', () => {
       const store = new InMemoryTokenStore()
       store.set('old', 'old-refresh')
 
-      const fetchFn = mockFetch(200, MOCK_TOKENS)
+      const fetchFn = mockFetch(200, envelope(MOCK_TOKENS))
       const auth = createAuth(fetchFn, store)
       const events: string[] = []
       auth.onAuthStateChange((event) => events.push(event))
@@ -484,7 +517,7 @@ describe('AuthClient', () => {
     })
 
     it('unsubscribe function stops notifications', async () => {
-      const fetchFn = mockFetch(200, { user: MOCK_USER, ...MOCK_TOKENS })
+      const fetchFn = mockFetch(200, envelope({ user: MOCK_USER, ...MOCK_TOKENS }))
       const auth = createAuth(fetchFn)
       const events: string[] = []
 
@@ -497,7 +530,7 @@ describe('AuthClient', () => {
     })
 
     it('supports multiple listeners', async () => {
-      const fetchFn = mockFetch(200, { user: MOCK_USER, ...MOCK_TOKENS })
+      const fetchFn = mockFetch(200, envelope({ user: MOCK_USER, ...MOCK_TOKENS }))
       const auth = createAuth(fetchFn)
       const events1: string[] = []
       const events2: string[] = []

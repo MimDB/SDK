@@ -1,6 +1,16 @@
 import { vi } from 'vitest'
 
 /**
+ * Wrap raw data in the backend's API envelope format.
+ *
+ * @param data - The payload to place in the `data` field.
+ * @returns An envelope object matching `{ data, error, meta }`.
+ */
+export function envelope<T>(data: T): { data: T; error: null; meta: { request_id: string } } {
+  return { data, error: null, meta: { request_id: 'test-req-id' } }
+}
+
+/**
  * Create a mock fetch function that resolves with the given status and body.
  *
  * @param status - HTTP status code.
@@ -21,6 +31,20 @@ export function mockFetch(
         'content-type': 'application/json',
         ...headers,
       },
+    }),
+  ) as unknown as typeof fetch
+}
+
+/**
+ * Create a mock fetch for 204 No Content responses (no body).
+ *
+ * @returns A vi.fn() mock typed as `typeof fetch`.
+ */
+export function mockFetchNoContent(): typeof fetch {
+  return vi.fn().mockResolvedValue(
+    new Response(null, {
+      status: 204,
+      statusText: 'No Content',
     }),
   ) as unknown as typeof fetch
 }

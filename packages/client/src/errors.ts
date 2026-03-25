@@ -42,12 +42,14 @@ export class MimDBError extends Error {
   static async fromResponse(response: Response): Promise<MimDBError> {
     try {
       const body = await response.json() as Record<string, unknown>
+      // The backend always returns { data, error, meta }.
+      // PostgREST responses are flat objects with code/message at root.
       const err = (body.error ?? body) as Record<string, unknown>
       return new MimDBError(
         (err.message as string | undefined) ?? response.statusText,
         (err.code as string | undefined) ?? (err.error_code as string | undefined) ?? `HTTP-${response.status}`,
         response.status,
-        err.hint as string | undefined,
+        (err.hint as string | undefined) ?? (err.detail as string | undefined),
       )
     } catch {
       return new MimDBError(

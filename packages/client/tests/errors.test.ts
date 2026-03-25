@@ -41,6 +41,30 @@ describe('MimDBError', () => {
       expect(err.hint).toBe('Check the schema cache')
     })
 
+    it('parses the backend envelope error format', async () => {
+      const body = {
+        data: null,
+        error: {
+          code: 'AUTH-0300',
+          message: 'Invalid credentials',
+          detail: 'Email or password is incorrect',
+        },
+        meta: { request_id: 'req-123' },
+      }
+
+      const response = new Response(JSON.stringify(body), {
+        status: 401,
+        statusText: 'Unauthorized',
+      })
+
+      const err = await MimDBError.fromResponse(response)
+
+      expect(err.message).toBe('Invalid credentials')
+      expect(err.code).toBe('AUTH-0300')
+      expect(err.status).toBe(401)
+      expect(err.hint).toBe('Email or password is incorrect')
+    })
+
     it('parses a nested error object', async () => {
       const body = {
         error: {

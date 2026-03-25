@@ -272,11 +272,25 @@ export class QueryBuilder<T> extends FilterBuilder<T> {
       const response = await this.fetchFn(url, init)
 
       if (!response.ok) {
-        // For maybeSingle, a 406 (no rows matched) is not an error
+        // For maybeSingle, PostgREST returns 406 for both zero-row and
+        // multi-row results. Only suppress the zero-row case; a multi-row
+        // result is a real error the caller needs to know about.
         if (this.isMaybeSingle && response.status === 406) {
+          const error = await MimDBError.fromResponse(response)
+          const msg = error.message.toLowerCase()
+          if (msg.includes('0 rows') || msg.includes('zero')) {
+            return {
+              data: null,
+              error: null,
+              count: null,
+              status: response.status,
+              statusText: response.statusText,
+            }
+          }
+          // Multi-row 406 - fall through to return the error
           return {
             data: null,
-            error: null,
+            error,
             count: null,
             status: response.status,
             statusText: response.statusText,

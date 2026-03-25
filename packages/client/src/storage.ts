@@ -1,5 +1,5 @@
 import { MimDBError } from './errors'
-import type { Bucket, UploadOptions } from './types'
+import type { ApiEnvelope, Bucket, StorageObject, UploadOptions } from './types'
 
 /**
  * Options for creating or updating a storage bucket.
@@ -10,7 +10,7 @@ export interface BucketOptions {
   /** Maximum file size in bytes. */
   fileSizeLimit?: number
   /** Allowed MIME types for uploads. */
-  allowedMimeTypes?: string[]
+  allowedTypes?: string[]
 }
 
 /**
@@ -90,7 +90,7 @@ export class StorageClient {
     const body: Record<string, unknown> = { name }
     if (opts?.public !== undefined) body.public = opts.public
     if (opts?.fileSizeLimit !== undefined) body.file_size_limit = opts.fileSizeLimit
-    if (opts?.allowedMimeTypes !== undefined) body.allowed_mime_types = opts.allowedMimeTypes
+    if (opts?.allowedTypes !== undefined) body.allowed_types = opts.allowedTypes
 
     const response = await this.fetchFn(url, {
       method: 'POST',
@@ -102,7 +102,8 @@ export class StorageClient {
       throw await MimDBError.fromResponse(response)
     }
 
-    return (await response.json()) as Bucket
+    const envelope = (await response.json()) as ApiEnvelope<Bucket>
+    return envelope.data
   }
 
   /**
@@ -125,7 +126,8 @@ export class StorageClient {
       throw await MimDBError.fromResponse(response)
     }
 
-    return (await response.json()) as Bucket[]
+    const envelope = (await response.json()) as ApiEnvelope<Bucket[]>
+    return envelope.data
   }
 
   /**
@@ -145,7 +147,8 @@ export class StorageClient {
       headers: { ...this.defaultHeaders },
     })
 
-    if (!response.ok) {
+    // Backend returns 204 No Content on success
+    if (!response.ok && response.status !== 204) {
       throw await MimDBError.fromResponse(response)
     }
   }
@@ -153,20 +156,20 @@ export class StorageClient {
   /**
    * Update a storage bucket's configuration.
    *
-   * Requires a service_role API key.
+   * Requires a service_role API key. The backend returns 204 No Content
+   * on success, so this method returns void.
    *
    * @param name - Name of the bucket to update.
    * @param opts - Bucket configuration fields to update.
-   * @returns The updated bucket.
    * @throws {MimDBError} If the API returns an error.
    */
-  async updateBucket(name: string, opts: BucketOptions): Promise<Bucket> {
+  async updateBucket(name: string, opts: BucketOptions): Promise<void> {
     const url = `${this.baseUrl}/v1/storage/${this.ref}/buckets/${name}`
 
     const body: Record<string, unknown> = {}
     if (opts.public !== undefined) body.public = opts.public
     if (opts.fileSizeLimit !== undefined) body.file_size_limit = opts.fileSizeLimit
-    if (opts.allowedMimeTypes !== undefined) body.allowed_mime_types = opts.allowedMimeTypes
+    if (opts.allowedTypes !== undefined) body.allowed_types = opts.allowedTypes
 
     const response = await this.fetchFn(url, {
       method: 'PATCH',
@@ -174,11 +177,10 @@ export class StorageClient {
       body: JSON.stringify(body),
     })
 
-    if (!response.ok) {
+    // Backend returns 204 No Content on success
+    if (!response.ok && response.status !== 204) {
       throw await MimDBError.fromResponse(response)
     }
-
-    return (await response.json()) as Bucket
   }
 }
 
@@ -193,13 +195,12 @@ export class StorageClient {
  * const bucket = mimdb.storage.from('avatars')
  *
  * // Upload
- * const { path } = await bucket.upload('users/123/avatar.png', imageBlob, {
+ * const obj = await bucket.upload('users/123/avatar.png', imageBlob, {
  *   contentType: 'image/png',
- *   upsert: true,
  * })
  *
  * // Get a signed URL valid for 1 hour
- * const { signedUrl } = await bucket.createSignedUrl('users/123/avatar.png', 3600)
+ * const { signedUrl } = await bucket.createSignedUrl('users/123/avatar.png')
  * ```
  */
 export class BucketClient {
@@ -233,15 +234,17 @@ export class BucketClient {
   /**
    * Upload a file to the bucket.
    *
+   * The backend returns the full object metadata on success.
+   *
    * @param path - Object path within the bucket (e.g. `folder/file.png`).
    * @param body - File content as a Blob, ArrayBuffer, string, or ReadableStream.
    * @param opts - Optional upload configuration.
-   * @returns An object containing the uploaded file path.
+   * @returns The created storage object metadata.
    * @throws {MimDBError} If the API returns an error.
    *
    * @example
    * ```ts
-   * const { path } = await bucket.upload('docs/readme.md', markdownBlob, {
+   * const obj = await bucket.upload('docs/readme.md', markdownBlob, {
    *   contentType: 'text/markdown',
    * })
    * ```
@@ -250,14 +253,11 @@ export class BucketClient {
     path: string,
     body: Blob | ArrayBuffer | string | ReadableStream,
     opts?: UploadOptions,
-  ): Promise<{ path: string }> {
+  ): Promise<StorageObject> {
     const url = `${this.baseUrl}/v1/storage/${this.ref}/object/${this.bucket}/${path}`
 
     const headers: Record<string, string> = { ...this.defaultHeaders }
     headers['Content-Type'] = opts?.contentType ?? 'application/octet-stream'
-    if (opts?.upsert) {
-      headers['x-upsert'] = 'true'
-    }
 
     const response = await this.fetchFn(url, {
       method: 'POST',
@@ -269,7 +269,8 @@ export class BucketClient {
       throw await MimDBError.fromResponse(response)
     }
 
-    return (await response.json()) as { path: string }
+    const envelope = (await response.json()) as ApiEnvelope<StorageObject>
+    return envelope.data
   }
 
   /**
@@ -303,7 +304,8 @@ export class BucketClient {
   /**
    * Delete one or more files from the bucket.
    *
-   * Sends a separate DELETE request for each path.
+   * Sends a separate DELETE request for each path. The backend returns
+   * 204 No Content for each successful deletion.
    *
    * @param paths - Array of object paths to delete.
    * @throws {MimDBError} If any deletion fails.
@@ -322,7 +324,8 @@ export class BucketClient {
         headers: { ...this.defaultHeaders },
       })
 
-      if (!response.ok) {
+      // Backend returns 204 No Content on success
+      if (!response.ok && response.status !== 204) {
         throw await MimDBError.fromResponse(response)
       }
     }
@@ -332,36 +335,33 @@ export class BucketClient {
    * Create a time-limited signed URL for downloading a file.
    *
    * The signed URL can be shared with users who do not have direct
-   * API credentials.
+   * API credentials. The TTL is configured server-side.
    *
-   * @param path      - Object path within the bucket.
-   * @param expiresIn - Number of seconds until the URL expires.
+   * @param path - Object path within the bucket.
    * @returns An object containing the signed download URL.
    * @throws {MimDBError} If the API returns an error.
    *
    * @example
    * ```ts
-   * // URL valid for 1 hour
-   * const { signedUrl } = await bucket.createSignedUrl('report.pdf', 3600)
+   * const { signedUrl } = await bucket.createSignedUrl('report.pdf')
    * ```
    */
   async createSignedUrl(
     path: string,
-    expiresIn: number,
   ): Promise<{ signedUrl: string }> {
     const url = `${this.baseUrl}/v1/storage/${this.ref}/sign/${this.bucket}/${path}`
 
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: { ...this.defaultHeaders },
-      body: JSON.stringify({ expiresIn }),
     })
 
     if (!response.ok) {
       throw await MimDBError.fromResponse(response)
     }
 
-    return (await response.json()) as { signedUrl: string }
+    const envelope = (await response.json()) as ApiEnvelope<{ signedURL: string }>
+    return { signedUrl: envelope.data.signedURL }
   }
 
   /**

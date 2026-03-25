@@ -1,11 +1,33 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MimDBClient } from '../src/client'
 import { StorageClient, BucketClient } from '../src/storage'
-import { mockFetch } from './helpers'
+import { envelope, mockFetch, mockFetchNoContent } from './helpers'
 
 const URL = 'https://api.mimdb.dev'
 const REF = 'abc123'
 const KEY = 'test-api-key'
+
+const MOCK_BUCKET = {
+  id: 'bucket-uuid-1',
+  project_id: 'project-uuid-1',
+  name: 'avatars',
+  public: true,
+  file_size_limit: 1024,
+  allowed_types: ['image/png'],
+  created_at: '2025-01-01T00:00:00Z',
+}
+
+const MOCK_OBJECT = {
+  id: 'obj-uuid-1',
+  bucket_id: 'bucket-uuid-1',
+  path: 'photo.png',
+  size: 12345,
+  content_type: 'image/png',
+  etag: 'abc123',
+  status: 'active',
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
 
 describe('MimDBClient.storage', () => {
   it('returns a StorageClient', () => {
@@ -37,25 +59,19 @@ describe('StorageClient', () => {
   })
 
   describe('.createBucket()', () => {
-    it('sends POST with name and options', async () => {
-      const fetchFn = mockFetch(201, {
-        name: 'avatars',
-        public: true,
-        file_size_limit: 1024,
-        allowed_mime_types: ['image/png'],
-        created_at: '2025-01-01T00:00:00Z',
-        updated_at: '2025-01-01T00:00:00Z',
-      })
+    it('sends POST with name and options, parses envelope', async () => {
+      const fetchFn = mockFetch(201, envelope(MOCK_BUCKET))
       const storage = createStorage(fetchFn)
 
       const bucket = await storage.createBucket('avatars', {
         public: true,
         fileSizeLimit: 1024,
-        allowedMimeTypes: ['image/png'],
+        allowedTypes: ['image/png'],
       })
 
       expect(bucket.name).toBe('avatars')
       expect(bucket.public).toBe(true)
+      expect(bucket.id).toBe('bucket-uuid-1')
 
       const call = vi.mocked(fetchFn).mock.calls[0]!
       const url = call[0] as string
@@ -66,16 +82,14 @@ describe('StorageClient', () => {
         name: 'avatars',
         public: true,
         file_size_limit: 1024,
-        allowed_mime_types: ['image/png'],
+        allowed_types: ['image/png'],
       })
     })
   })
 
   describe('.listBuckets()', () => {
-    it('sends GET to the buckets endpoint', async () => {
-      const fetchFn = mockFetch(200, [
-        { name: 'avatars', public: true, file_size_limit: null, allowed_mime_types: null, created_at: '', updated_at: '' },
-      ])
+    it('sends GET and parses envelope', async () => {
+      const fetchFn = mockFetch(200, envelope([MOCK_BUCKET]))
       const storage = createStorage(fetchFn)
 
       const buckets = await storage.listBuckets()
@@ -92,8 +106,8 @@ describe('StorageClient', () => {
   })
 
   describe('.deleteBucket()', () => {
-    it('sends DELETE to the bucket endpoint', async () => {
-      const fetchFn = mockFetch(200, {})
+    it('sends DELETE and accepts 204 No Content', async () => {
+      const fetchFn = mockFetchNoContent()
       const storage = createStorage(fetchFn)
 
       await storage.deleteBucket('avatars')
@@ -107,23 +121,14 @@ describe('StorageClient', () => {
   })
 
   describe('.updateBucket()', () => {
-    it('sends PATCH with updated options', async () => {
-      const fetchFn = mockFetch(200, {
-        name: 'avatars',
-        public: false,
-        file_size_limit: 2048,
-        allowed_mime_types: null,
-        created_at: '',
-        updated_at: '',
-      })
+    it('sends PATCH and accepts 204 No Content', async () => {
+      const fetchFn = mockFetchNoContent()
       const storage = createStorage(fetchFn)
 
-      const bucket = await storage.updateBucket('avatars', {
+      await storage.updateBucket('avatars', {
         public: false,
         fileSizeLimit: 2048,
       })
-
-      expect(bucket.public).toBe(false)
 
       const call = vi.mocked(fetchFn).mock.calls[0]!
       const url = call[0] as string
@@ -150,8 +155,8 @@ describe('BucketClient', () => {
   }
 
   describe('.upload()', () => {
-    it('sends POST with correct path and Content-Type', async () => {
-      const fetchFn = mockFetch(200, { path: 'photo.png' })
+    it('sends POST with correct path and Content-Type, parses envelope', async () => {
+      const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
       const bucket = createBucket(fetchFn)
 
       const result = await bucket.upload('photo.png', 'file-contents', {
@@ -159,6 +164,7 @@ describe('BucketClient', () => {
       })
 
       expect(result.path).toBe('photo.png')
+      expect(result.id).toBe('obj-uuid-1')
 
       const call = vi.mocked(fetchFn).mock.calls[0]!
       const url = call[0] as string
@@ -171,7 +177,7 @@ describe('BucketClient', () => {
     })
 
     it('uses application/octet-stream as default Content-Type', async () => {
-      const fetchFn = mockFetch(200, { path: 'data.bin' })
+      const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
       const bucket = createBucket(fetchFn)
 
       await bucket.upload('data.bin', 'binary-data')
@@ -182,20 +188,8 @@ describe('BucketClient', () => {
       expect(headers['Content-Type']).toBe('application/octet-stream')
     })
 
-    it('sends x-upsert header when upsert is true', async () => {
-      const fetchFn = mockFetch(200, { path: 'photo.png' })
-      const bucket = createBucket(fetchFn)
-
-      await bucket.upload('photo.png', 'file-contents', { upsert: true })
-
-      const call = vi.mocked(fetchFn).mock.calls[0]!
-      const init = call[1] as RequestInit
-      const headers = init.headers as Record<string, string>
-      expect(headers['x-upsert']).toBe('true')
-    })
-
-    it('does not send x-upsert header when upsert is false or omitted', async () => {
-      const fetchFn = mockFetch(200, { path: 'photo.png' })
+    it('does not send x-upsert header', async () => {
+      const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
       const bucket = createBucket(fetchFn)
 
       await bucket.upload('photo.png', 'file-contents')
@@ -235,7 +229,7 @@ describe('BucketClient', () => {
 
   describe('.remove()', () => {
     it('sends DELETE for each path', async () => {
-      const fetchFn = mockFetch(200, {})
+      const fetchFn = mockFetchNoContent()
       const bucket = createBucket(fetchFn)
 
       await bucket.remove(['a.png', 'b.png', 'c.png'])
@@ -255,20 +249,21 @@ describe('BucketClient', () => {
   })
 
   describe('.createSignedUrl()', () => {
-    it('sends POST with expiresIn', async () => {
-      const fetchFn = mockFetch(200, { signedUrl: 'https://signed.example.com/photo.png?token=abc' })
+    it('sends POST and parses signedURL from envelope', async () => {
+      const fetchFn = mockFetch(200, envelope({ signedURL: '/v1/storage/abc123/object/avatars/photo.png?token=tok' }))
       const bucket = createBucket(fetchFn)
 
-      const result = await bucket.createSignedUrl('photo.png', 3600)
+      const result = await bucket.createSignedUrl('photo.png')
 
-      expect(result.signedUrl).toBe('https://signed.example.com/photo.png?token=abc')
+      expect(result.signedUrl).toBe('/v1/storage/abc123/object/avatars/photo.png?token=tok')
 
       const call = vi.mocked(fetchFn).mock.calls[0]!
       const url = call[0] as string
       const init = call[1] as RequestInit
       expect(url).toBe(`${URL}/v1/storage/${REF}/sign/avatars/photo.png`)
       expect(init.method).toBe('POST')
-      expect(JSON.parse(init.body as string)).toEqual({ expiresIn: 3600 })
+      // No body - TTL is configured server-side
+      expect(init.body).toBeUndefined()
     })
   })
 

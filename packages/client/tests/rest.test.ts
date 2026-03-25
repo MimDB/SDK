@@ -162,14 +162,25 @@ describe('QueryBuilder', () => {
       expect(headers['Accept']).toBe('application/vnd.pgrst.object+json')
     })
 
-    it('maybeSingle() returns null data on 406', async () => {
-      const fetchFn = mockFetch(406, { message: 'no rows' })
+    it('maybeSingle() returns null data on 406 with zero-row message', async () => {
+      const fetchFn = mockFetch(406, { message: 'JSON object requested, multiple (or no) rows returned. The result contains 0 rows', code: 'PGRST116' })
       const builder = createBuilder(fetchFn)
 
       const { data, error } = await builder.select('*').maybeSingle()
 
       expect(data).toBeNull()
       expect(error).toBeNull()
+    })
+
+    it('maybeSingle() returns error on 406 with multiple-row message', async () => {
+      const fetchFn = mockFetch(406, { message: 'JSON object requested, multiple (or no) rows returned. The result contains 3 rows', code: 'PGRST116' })
+      const builder = createBuilder(fetchFn)
+
+      const { data, error } = await builder.select('*').maybeSingle()
+
+      expect(data).toBeNull()
+      expect(error).not.toBeNull()
+      expect(error!.status).toBe(406)
     })
 
     it('count() adds correct Prefer header', async () => {

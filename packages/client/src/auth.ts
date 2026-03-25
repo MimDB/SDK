@@ -1,7 +1,7 @@
 import { AuthAdminClient } from './auth-admin'
 import type { TokenStore } from './auth-store'
 import { MimDBError } from './errors'
-import type { Tokens, User } from './types'
+import type { ApiEnvelope, Tokens, User } from './types'
 
 /**
  * Event types emitted when the authentication state changes.
@@ -109,7 +109,8 @@ export class AuthClient {
       throw await MimDBError.fromResponse(response)
     }
 
-    const result = (await response.json()) as { user: User } & Tokens
+    const envelope = (await response.json()) as ApiEnvelope<{ user: User } & Tokens>
+    const result = envelope.data
     const tokens: Tokens = {
       access_token: result.access_token,
       refresh_token: result.refresh_token,
@@ -135,19 +136,20 @@ export class AuthClient {
     email: string,
     password: string,
   ): Promise<{ user: User; tokens: Tokens }> {
-    const url = `${this.baseUrl}/v1/auth/${this.ref}/token`
+    const url = `${this.baseUrl}/v1/auth/${this.ref}/token?grant_type=password`
 
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: { ...this.defaultHeaders },
-      body: JSON.stringify({ email, password, grant_type: 'password' }),
+      body: JSON.stringify({ email, password }),
     })
 
     if (!response.ok) {
       throw await MimDBError.fromResponse(response)
     }
 
-    const result = (await response.json()) as { user: User } & Tokens
+    const envelope = (await response.json()) as ApiEnvelope<{ user: User } & Tokens>
+    const result = envelope.data
     const tokens: Tokens = {
       access_token: result.access_token,
       refresh_token: result.refresh_token,
@@ -162,7 +164,8 @@ export class AuthClient {
   /**
    * Sign out the current user.
    *
-   * Sends a logout request to the API, clears stored tokens, and fires
+   * Sends a logout request to the API with the stored refresh token
+   * so the server can revoke it. Clears stored tokens and fires
    * a `SIGNED_OUT` event.
    *
    * @throws {MimDBError} If the API returns an error response.
@@ -179,9 +182,13 @@ export class AuthClient {
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers,
+      body: JSON.stringify({
+        refresh_token: session?.refreshToken ?? undefined,
+      }),
     })
 
-    if (!response.ok) {
+    // 204 No Content is the expected success response
+    if (!response.ok && response.status !== 204) {
       throw await MimDBError.fromResponse(response)
     }
 
@@ -204,19 +211,20 @@ export class AuthClient {
       throw new MimDBError('No refresh token available', 'AUTH_NO_TOKEN', 0)
     }
 
-    const url = `${this.baseUrl}/v1/auth/${this.ref}/token`
+    const url = `${this.baseUrl}/v1/auth/${this.ref}/token?grant_type=refresh_token`
 
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: { ...this.defaultHeaders },
-      body: JSON.stringify({ refresh_token: token, grant_type: 'refresh_token' }),
+      body: JSON.stringify({ refresh_token: token }),
     })
 
     if (!response.ok) {
       throw await MimDBError.fromResponse(response)
     }
 
-    const tokens = (await response.json()) as Tokens
+    const envelope = (await response.json()) as ApiEnvelope<Tokens>
+    const tokens = envelope.data
 
     this.setSession(tokens)
     this.emit('TOKEN_REFRESHED')
@@ -253,7 +261,8 @@ export class AuthClient {
       throw await MimDBError.fromResponse(response)
     }
 
-    return (await response.json()) as User
+    const envelope = (await response.json()) as ApiEnvelope<User>
+    return envelope.data
   }
 
   /**
@@ -290,7 +299,8 @@ export class AuthClient {
       throw await MimDBError.fromResponse(response)
     }
 
-    return (await response.json()) as User
+    const envelope = (await response.json()) as ApiEnvelope<User>
+    return envelope.data
   }
 
   // ---------------------------------------------------------------------------
@@ -316,14 +326,26 @@ export class AuthClient {
   /**
    * Parse tokens from a URL hash fragment returned by an OAuth callback.
    *
+   * Checks for error fragments first and returns an error result if present.
+   *
    * @param urlFragment - The URL hash (e.g. `#access_token=...&refresh_token=...&expires_in=3600`).
-   * @returns Parsed tokens, or null if the required fields are missing.
+   * @returns Parsed tokens on success, an error object if the fragment contains
+   *          an error, or null if the required fields are missing.
    */
   handleOAuthCallback(
     urlFragment: string,
-  ): { accessToken: string; refreshToken: string; expiresIn: number } | null {
+  ): { accessToken: string; refreshToken: string; expiresIn: number } | { error: string; errorDescription?: string } | null {
     const hash = urlFragment.startsWith('#') ? urlFragment.slice(1) : urlFragment
     const params = new URLSearchParams(hash)
+
+    // Check for error fragments from the OAuth provider
+    const errorParam = params.get('error')
+    if (errorParam) {
+      return {
+        error: errorParam,
+        errorDescription: params.get('error_description') ?? undefined,
+      }
+    }
 
     const accessToken = params.get('access_token')
     const refreshToken = params.get('refresh_token')

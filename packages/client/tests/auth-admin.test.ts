@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AuthAdminClient } from '../src/auth-admin'
-import { mockFetch } from './helpers'
+import { envelope, mockFetch } from './helpers'
 
 const URL = 'https://api.mimdb.dev'
 const REF = 'abc123'
@@ -27,8 +27,8 @@ function createAdmin(fetchFn: typeof fetch): AuthAdminClient {
 
 describe('AuthAdminClient', () => {
   describe('listUsers', () => {
-    it('sends GET to /users', async () => {
-      const fetchFn = mockFetch(200, [MOCK_USER])
+    it('sends GET to /users and parses envelope', async () => {
+      const fetchFn = mockFetch(200, envelope([MOCK_USER]))
       const admin = createAdmin(fetchFn)
 
       const users = await admin.listUsers()
@@ -43,7 +43,7 @@ describe('AuthAdminClient', () => {
     })
 
     it('sends limit and offset query params', async () => {
-      const fetchFn = mockFetch(200, [MOCK_USER])
+      const fetchFn = mockFetch(200, envelope([MOCK_USER]))
       const admin = createAdmin(fetchFn)
 
       await admin.listUsers({ limit: 10, offset: 20 })
@@ -55,7 +55,7 @@ describe('AuthAdminClient', () => {
     })
 
     it('omits params when not provided', async () => {
-      const fetchFn = mockFetch(200, [])
+      const fetchFn = mockFetch(200, envelope([]))
       const admin = createAdmin(fetchFn)
 
       await admin.listUsers()
@@ -66,7 +66,7 @@ describe('AuthAdminClient', () => {
     })
 
     it('sends service_role Authorization header', async () => {
-      const fetchFn = mockFetch(200, [])
+      const fetchFn = mockFetch(200, envelope([]))
       const admin = createAdmin(fetchFn)
 
       await admin.listUsers()
@@ -78,7 +78,11 @@ describe('AuthAdminClient', () => {
     })
 
     it('throws on API error', async () => {
-      const fetchFn = mockFetch(403, { message: 'Forbidden', code: 'AUTH_FORBIDDEN' })
+      const fetchFn = mockFetch(403, {
+        data: null,
+        error: { code: 'AUTH-0500', message: 'Forbidden' },
+        meta: { request_id: 'test' },
+      })
       const admin = createAdmin(fetchFn)
 
       await expect(admin.listUsers()).rejects.toThrow('Forbidden')
@@ -86,8 +90,8 @@ describe('AuthAdminClient', () => {
   })
 
   describe('getUserByEmail', () => {
-    it('sends GET with email query param', async () => {
-      const fetchFn = mockFetch(200, [MOCK_USER])
+    it('sends GET with email query param and parses envelope', async () => {
+      const fetchFn = mockFetch(200, envelope(MOCK_USER))
       const admin = createAdmin(fetchFn)
 
       const user = await admin.getUserByEmail('test@example.com')
@@ -100,8 +104,12 @@ describe('AuthAdminClient', () => {
       expect(url.pathname).toBe(`/v1/auth/${REF}/users`)
     })
 
-    it('returns null when no user is found', async () => {
-      const fetchFn = mockFetch(200, [])
+    it('returns null when backend returns 404', async () => {
+      const fetchFn = mockFetch(404, {
+        data: null,
+        error: { code: 'AUTH-0700', message: 'User not found' },
+        meta: { request_id: 'test' },
+      })
       const admin = createAdmin(fetchFn)
 
       const user = await admin.getUserByEmail('missing@example.com')
@@ -109,8 +117,12 @@ describe('AuthAdminClient', () => {
       expect(user).toBeNull()
     })
 
-    it('throws on API error', async () => {
-      const fetchFn = mockFetch(500, { message: 'Internal error', code: 'INTERNAL' })
+    it('throws on non-404 API error', async () => {
+      const fetchFn = mockFetch(500, {
+        data: null,
+        error: { code: 'AUTH-0900', message: 'Internal error' },
+        meta: { request_id: 'test' },
+      })
       const admin = createAdmin(fetchFn)
 
       await expect(admin.getUserByEmail('test@example.com'))
@@ -120,9 +132,9 @@ describe('AuthAdminClient', () => {
   })
 
   describe('updateUserById', () => {
-    it('sends PATCH with app_metadata', async () => {
+    it('sends PATCH with app_metadata only', async () => {
       const updatedUser = { ...MOCK_USER, app_metadata: { role: 'admin' } }
-      const fetchFn = mockFetch(200, updatedUser)
+      const fetchFn = mockFetch(200, envelope(updatedUser))
       const admin = createAdmin(fetchFn)
 
       const result = await admin.updateUserById('user-uuid-1', {
@@ -141,36 +153,12 @@ describe('AuthAdminClient', () => {
       })
     })
 
-    it('sends PATCH with user_metadata', async () => {
-      const fetchFn = mockFetch(200, MOCK_USER)
-      const admin = createAdmin(fetchFn)
-
-      await admin.updateUserById('user-uuid-1', {
-        userMetadata: { theme: 'dark' },
-      })
-
-      const call = vi.mocked(fetchFn).mock.calls[0]!
-      const body = JSON.parse((call[1] as RequestInit).body as string)
-      expect(body.user_metadata).toEqual({ theme: 'dark' })
-    })
-
-    it('sends both app_metadata and user_metadata', async () => {
-      const fetchFn = mockFetch(200, MOCK_USER)
-      const admin = createAdmin(fetchFn)
-
-      await admin.updateUserById('user-uuid-1', {
-        appMetadata: { role: 'moderator' },
-        userMetadata: { name: 'Bob' },
-      })
-
-      const call = vi.mocked(fetchFn).mock.calls[0]!
-      const body = JSON.parse((call[1] as RequestInit).body as string)
-      expect(body.app_metadata).toEqual({ role: 'moderator' })
-      expect(body.user_metadata).toEqual({ name: 'Bob' })
-    })
-
     it('throws on API error', async () => {
-      const fetchFn = mockFetch(404, { message: 'User not found', code: 'AUTH_NOT_FOUND' })
+      const fetchFn = mockFetch(404, {
+        data: null,
+        error: { code: 'AUTH-0700', message: 'User not found' },
+        meta: { request_id: 'test' },
+      })
       const admin = createAdmin(fetchFn)
 
       await expect(admin.updateUserById('missing-id', { appMetadata: {} }))

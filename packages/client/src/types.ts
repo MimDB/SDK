@@ -2,6 +2,23 @@ import type { TokenStore } from './auth-store'
 import type { MimDBError } from './errors'
 
 /**
+ * Unified API response envelope returned by the Mimisbrunnr backend.
+ *
+ * Success responses populate `data` and set `error` to null.
+ * Error responses set `data` to null and populate `error`.
+ *
+ * @typeParam T - The shape of the data payload.
+ */
+export interface ApiEnvelope<T> {
+  /** The response payload, or null on error. */
+  data: T
+  /** Structured error object, or null on success. */
+  error: { code: string; message: string; detail?: string } | null
+  /** Response metadata. Always contains a request_id. */
+  meta: { request_id: string; next_cursor?: string; has_more?: boolean }
+}
+
+/**
  * Result returned from executing a query against the MimDB API.
  *
  * @typeParam T - The expected shape of the returned data.
@@ -118,18 +135,46 @@ export interface Tokens {
  * A storage bucket managed by the MimDB Storage API.
  */
 export interface Bucket {
+  /** Unique bucket identifier (UUID). */
+  id: string
+  /** Project this bucket belongs to. */
+  project_id: string
   /** Unique bucket name. */
   name: string
   /** Whether the bucket allows unauthenticated read access. */
   public: boolean
-  /** Maximum file size in bytes, or null for unlimited. */
-  file_size_limit: number | null
-  /** Allowed MIME types for uploads, or null for unrestricted. */
-  allowed_mime_types: string[] | null
+  /** Maximum file size in bytes. Absent when unlimited. */
+  file_size_limit?: number
+  /** Allowed MIME types for uploads. Absent when unrestricted. */
+  allowed_types?: string[]
   /** ISO 8601 timestamp of when the bucket was created. */
   created_at: string
-  /** ISO 8601 timestamp of when the bucket was last updated. */
+}
+
+/**
+ * A storage object returned by upload and list operations.
+ */
+export interface StorageObject {
+  /** Unique object identifier (UUID). */
+  id: string
+  /** ID of the bucket this object belongs to. */
+  bucket_id: string
+  /** Object path within the bucket. */
+  path: string
+  /** File size in bytes. */
+  size: number
+  /** MIME type of the file content. */
+  content_type: string
+  /** Content hash for cache validation. */
+  etag: string
+  /** Object lifecycle status. */
+  status: string
+  /** ISO 8601 timestamp of when the object was created. */
+  created_at: string
+  /** ISO 8601 timestamp of when the object was last updated. */
   updated_at: string
+  /** UUID of the user who owns this object, if applicable. */
+  owner_id?: string
 }
 
 /**
@@ -138,6 +183,4 @@ export interface Bucket {
 export interface UploadOptions {
   /** MIME type of the file. Defaults to `application/octet-stream`. */
   contentType?: string
-  /** When true, overwrites an existing file at the same path. */
-  upsert?: boolean
 }

@@ -13,6 +13,7 @@ export type { TokenStore } from './auth-store'
 export { StorageClient, BucketClient } from './storage'
 export type { BucketOptions } from './storage'
 export type {
+  ApiEnvelope,
   QueryResult,
   OrderOptions,
   CountMethod,
@@ -22,6 +23,7 @@ export type {
   User,
   Tokens,
   Bucket,
+  StorageObject,
   UploadOptions,
 } from './types'
 

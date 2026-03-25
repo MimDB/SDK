@@ -1,5 +1,5 @@
 import { MimDBError } from './errors'
-import type { User } from './types'
+import type { ApiEnvelope, User } from './types'
 
 /**
  * Admin client for managing users with elevated (service_role) privileges.
@@ -64,15 +64,19 @@ export class AuthAdminClient {
       throw await MimDBError.fromResponse(response)
     }
 
-    return (await response.json()) as User[]
+    const envelope = (await response.json()) as ApiEnvelope<User[]>
+    return envelope.data
   }
 
   /**
    * Look up a user by their email address.
    *
+   * The backend returns 404 when no user matches the email, which this
+   * method handles by returning null.
+   *
    * @param email - Email address to search for.
    * @returns The matching user, or null if no user was found.
-   * @throws {MimDBError} If the API returns an error response other than empty results.
+   * @throws {MimDBError} If the API returns an error response other than 404.
    */
   async getUserByEmail(email: string): Promise<User | null> {
     const params = new URLSearchParams({ email })
@@ -84,32 +88,37 @@ export class AuthAdminClient {
     })
 
     if (!response.ok) {
+      // Backend returns 404 when no user matches the email
+      if (response.status === 404) {
+        return null
+      }
       throw await MimDBError.fromResponse(response)
     }
 
-    const users = (await response.json()) as User[]
-    return users[0] ?? null
+    const envelope = (await response.json()) as ApiEnvelope<User>
+    return envelope.data
   }
 
   /**
    * Update a user by their ID with admin-level metadata.
    *
+   * The admin update endpoint only supports `app_metadata`. Use the
+   * authenticated user's own `updateUser` method for `user_metadata`.
+   *
    * @param id   - UUID of the user to update.
    * @param data - Fields to update.
-   * @param data.appMetadata  - Application-level metadata (only settable by admins).
-   * @param data.userMetadata - User-level metadata.
+   * @param data.appMetadata - Application-level metadata (only settable by admins).
    * @returns The updated user record.
    * @throws {MimDBError} If the API returns an error response.
    */
   async updateUserById(
     id: string,
-    data: { appMetadata?: Record<string, unknown>; userMetadata?: Record<string, unknown> },
+    data: { appMetadata?: Record<string, unknown> },
   ): Promise<User> {
     const url = `${this.baseUrl}/v1/auth/${this.ref}/users/${id}`
 
     const body: Record<string, unknown> = {}
     if (data.appMetadata !== undefined) body.app_metadata = data.appMetadata
-    if (data.userMetadata !== undefined) body.user_metadata = data.userMetadata
 
     const response = await this.fetchFn(url, {
       method: 'PATCH',
@@ -121,6 +130,7 @@ export class AuthAdminClient {
       throw await MimDBError.fromResponse(response)
     }
 
-    return (await response.json()) as User
+    const envelope = (await response.json()) as ApiEnvelope<User>
+    return envelope.data
   }
 }

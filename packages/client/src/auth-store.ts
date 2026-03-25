@@ -45,18 +45,29 @@ export class InMemoryTokenStore implements TokenStore {
   }
 }
 
-/** @internal localStorage key for the access token. */
-const LS_ACCESS_KEY = 'mimdb-access-token'
-/** @internal localStorage key for the refresh token. */
-const LS_REFRESH_KEY = 'mimdb-refresh-token'
-
 /**
  * Token store backed by the browser's `localStorage`.
+ *
+ * Keys are scoped by project ref to prevent cross-project collisions
+ * when multiple MimDB clients coexist in the same browser origin.
  *
  * Gracefully degrades to a no-op when `localStorage` is unavailable
  * (e.g. server-side rendering or restricted browser contexts).
  */
 export class LocalStorageTokenStore implements TokenStore {
+  /** @internal localStorage key for the access token. */
+  private readonly accessKey: string
+  /** @internal localStorage key for the refresh token. */
+  private readonly refreshKey: string
+
+  /**
+   * @param projectRef - Short project reference ID used to scope localStorage keys.
+   */
+  constructor(projectRef: string) {
+    this.accessKey = `mimdb-${projectRef}-access-token`
+    this.refreshKey = `mimdb-${projectRef}-refresh-token`
+  }
+
   /**
    * Whether `localStorage` is available in the current environment.
    *
@@ -73,8 +84,8 @@ export class LocalStorageTokenStore implements TokenStore {
   get(): { accessToken: string; refreshToken: string } | null {
     if (!this.isAvailable()) return null
 
-    const accessToken = localStorage.getItem(LS_ACCESS_KEY)
-    const refreshToken = localStorage.getItem(LS_REFRESH_KEY)
+    const accessToken = localStorage.getItem(this.accessKey)
+    const refreshToken = localStorage.getItem(this.refreshKey)
 
     if (accessToken && refreshToken) {
       return { accessToken, refreshToken }
@@ -86,14 +97,14 @@ export class LocalStorageTokenStore implements TokenStore {
   set(accessToken: string, refreshToken: string): void {
     if (!this.isAvailable()) return
 
-    localStorage.setItem(LS_ACCESS_KEY, accessToken)
-    localStorage.setItem(LS_REFRESH_KEY, refreshToken)
+    localStorage.setItem(this.accessKey, accessToken)
+    localStorage.setItem(this.refreshKey, refreshToken)
   }
 
   clear(): void {
     if (!this.isAvailable()) return
 
-    localStorage.removeItem(LS_ACCESS_KEY)
-    localStorage.removeItem(LS_REFRESH_KEY)
+    localStorage.removeItem(this.accessKey)
+    localStorage.removeItem(this.refreshKey)
   }
 }
