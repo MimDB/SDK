@@ -1,10 +1,13 @@
+import { MimDBRealtimeClient } from '@mimdb/realtime'
 import { AuthClient } from './auth'
 import { InMemoryTokenStore } from './auth-store'
 import type { TokenStore } from './auth-store'
 import { MimDBError } from './errors'
+import { fetchWithRetry } from './retry'
 import { QueryBuilder } from './rest'
+import type { QueryMiddleware } from './rest'
 import { StorageClient } from './storage'
-import type { ClientOptions, QueryResult } from './types'
+import type { ClientOptions, QueryResult, RetryOptions } from './types'
 
 /**
  * MimDB client - the main entry point for interacting with a Mimisbrunnr project.
@@ -33,7 +36,10 @@ export class MimDBClient {
   private readonly defaultHeaders: Record<string, string>
   private _auth: AuthClient | null = null
   private _storage: StorageClient | null = null
+  private _realtime: MimDBRealtimeClient | null = null
   private readonly tokenStore: TokenStore
+  private readonly options?: ClientOptions
+  private readonly middleware: QueryMiddleware
 
   /**
    * @param url        - Base URL of the MimDB API (e.g. `https://api.mimdb.dev`).
@@ -61,6 +67,18 @@ export class MimDBClient {
     }
 
     this.tokenStore = options?.tokenStore ?? new InMemoryTokenStore()
+    this.options = options
+
+    // Build middleware from options
+    const retryOpts = options?.retry
+    const resolvedRetry: RetryOptions | undefined =
+      retryOpts === true ? {} : retryOpts === false ? undefined : retryOpts ?? undefined
+
+    this.middleware = {
+      retry: resolvedRetry,
+      onRequest: options?.onRequest,
+      onResponse: options?.onResponse,
+    }
   }
 
   /**
@@ -99,6 +117,7 @@ export class MimDBClient {
         this.fetchFn,
         { ...this.defaultHeaders },
         this.tokenStore,
+        this.options?.autoRefresh,
       )
 
       // Keep the REST Authorization header in sync with auth token changes
@@ -130,6 +149,32 @@ export class MimDBClient {
    * const url = client.storage.from('avatars').getPublicUrl('photo.png')
    * ```
    */
+  /**
+   * Access the realtime client for subscribing to live database changes
+   * via WebSocket.
+   *
+   * The realtime client is lazily instantiated on first access using
+   * the same URL, project ref, and API key as the main client.
+   *
+   * @example
+   * ```ts
+   * const sub = client.realtime.subscribe('messages', {
+   *   event: 'INSERT',
+   *   onEvent: (e) => console.log('New message:', e.new),
+   * })
+   * ```
+   */
+  get realtime(): MimDBRealtimeClient {
+    if (!this._realtime) {
+      this._realtime = new MimDBRealtimeClient({
+        url: this.baseUrl,
+        projectRef: this.ref,
+        apiKey: this.apiKey,
+      })
+    }
+    return this._realtime
+  }
+
   get storage(): StorageClient {
     if (!this._storage) {
       this._storage = new StorageClient(
@@ -159,7 +204,7 @@ export class MimDBClient {
    */
   from<T = Record<string, unknown>>(table: string): QueryBuilder<T> {
     const restUrl = `${this.baseUrl}/v1/rest/${this.ref}`
-    return new QueryBuilder<T>(restUrl, table, this.fetchFn, { ...this.defaultHeaders })
+    return new QueryBuilder<T>(restUrl, table, this.fetchFn, { ...this.defaultHeaders }, this.middleware)
   }
 
   /**
@@ -181,12 +226,30 @@ export class MimDBClient {
   ): Promise<QueryResult<T>> {
     const url = `${this.baseUrl}/v1/rest/${this.ref}/rpc/${fn}`
 
+    let init: RequestInit = {
+      method: 'POST',
+      headers: { ...this.defaultHeaders },
+      body: JSON.stringify(params ?? {}),
+    }
+
+    // Apply request interceptor
+    if (this.middleware.onRequest) {
+      init = await this.middleware.onRequest(url, init)
+    }
+
     try {
-      const response = await this.fetchFn(url, {
-        method: 'POST',
-        headers: { ...this.defaultHeaders },
-        body: JSON.stringify(params ?? {}),
-      })
+      let response: Response
+
+      if (this.middleware.retry) {
+        response = await fetchWithRetry(this.fetchFn, url, init, this.middleware.retry)
+      } else {
+        response = await this.fetchFn(url, init)
+      }
+
+      // Apply response interceptor
+      if (this.middleware.onResponse) {
+        response = await this.middleware.onResponse(response)
+      }
 
       if (!response.ok) {
         const error = await MimDBError.fromResponse(response)

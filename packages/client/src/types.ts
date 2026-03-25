@@ -78,6 +78,39 @@ export interface TextSearchOptions {
 }
 
 /**
+ * Configuration for request retry with exponential backoff on transient server errors.
+ */
+export interface RetryOptions {
+  /** Maximum number of retries. Defaults to 3. */
+  maxRetries?: number
+  /** Base delay in ms for exponential backoff. Defaults to 1000. */
+  baseDelay?: number
+  /** Maximum delay in ms between retries. Defaults to 10000. */
+  maxDelay?: number
+  /** HTTP status codes that trigger a retry. Defaults to [502, 503, 504]. */
+  retryOn?: number[]
+}
+
+/**
+ * Interceptor called before each outgoing request.
+ * Can modify the `RequestInit` (headers, body, etc.) before the fetch call.
+ *
+ * @param url  - The request URL.
+ * @param init - The `RequestInit` object that will be passed to `fetch`.
+ * @returns A possibly-modified `RequestInit`, or a promise of one.
+ */
+export type RequestInterceptor = (url: string, init: RequestInit) => RequestInit | Promise<RequestInit>
+
+/**
+ * Interceptor called after each response is received.
+ * Can transform or inspect the response before it is processed.
+ *
+ * @param response - The `Response` object returned by `fetch`.
+ * @returns A possibly-modified `Response`, or a promise of one.
+ */
+export type ResponseInterceptor = (response: Response) => Response | Promise<Response>
+
+/**
  * Options accepted by `createClient` and `MimDBClient`.
  */
 export interface ClientOptions {
@@ -87,6 +120,27 @@ export interface ClientOptions {
   headers?: Record<string, string>
   /** Custom token store for auth session persistence. Defaults to `InMemoryTokenStore`. */
   tokenStore?: TokenStore
+  /**
+   * Whether to automatically refresh the access token before expiry.
+   * Defaults to true.
+   */
+  autoRefresh?: boolean
+  /**
+   * Retry configuration for transient server errors (5xx).
+   * Set to `true` for default retry settings, or pass a `RetryOptions` object.
+   * Defaults to disabled (no retries).
+   */
+  retry?: RetryOptions | boolean
+  /**
+   * Interceptor called before each outgoing REST/RPC request.
+   * Use to add custom headers, logging, or request transformation.
+   */
+  onRequest?: RequestInterceptor
+  /**
+   * Interceptor called after each response is received.
+   * Use for logging, error transformation, or response modification.
+   */
+  onResponse?: ResponseInterceptor
 }
 
 // ---------------------------------------------------------------------------

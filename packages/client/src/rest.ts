@@ -1,6 +1,7 @@
 import { MimDBError } from './errors'
 import { FilterBuilder } from './filters'
-import type { CountMethod, OrderOptions, QueryResult } from './types'
+import { fetchWithRetry } from './retry'
+import type { CountMethod, OrderOptions, QueryResult, RequestInterceptor, ResponseInterceptor, RetryOptions } from './types'
 
 /**
  * Builds and executes a PostgREST-compatible query against a single table.
@@ -22,10 +23,24 @@ import type { CountMethod, OrderOptions, QueryResult } from './types'
  *   .limit(10)
  * ```
  */
+/**
+ * Middleware configuration passed to each `QueryBuilder` so it can apply
+ * interceptors and retry logic during request execution.
+ */
+export interface QueryMiddleware {
+  /** Retry configuration. Undefined means no retries. */
+  retry?: RetryOptions
+  /** Interceptor applied before each outgoing request. */
+  onRequest?: RequestInterceptor
+  /** Interceptor applied after each response. */
+  onResponse?: ResponseInterceptor
+}
+
 export class QueryBuilder<T> extends FilterBuilder<T> {
   private readonly baseUrl: string
   private readonly table: string
   private readonly fetchFn: typeof fetch
+  private readonly middleware: QueryMiddleware
 
   private method: string = 'GET'
   private body: unknown = undefined
@@ -38,17 +53,20 @@ export class QueryBuilder<T> extends FilterBuilder<T> {
    * @param table          - Table name to query.
    * @param fetchFn        - Fetch implementation.
    * @param defaultHeaders - Headers applied to every request (auth, content-type, etc.).
+   * @param middleware      - Optional retry and interceptor configuration.
    */
   constructor(
     baseUrl: string,
     table: string,
     fetchFn: typeof fetch,
     defaultHeaders: Record<string, string>,
+    middleware?: QueryMiddleware,
   ) {
     super(new URLSearchParams(), { ...defaultHeaders })
     this.baseUrl = baseUrl
     this.table = table
     this.fetchFn = fetchFn
+    this.middleware = middleware ?? {}
   }
 
   // ---------------------------------------------------------------------------
@@ -259,7 +277,7 @@ export class QueryBuilder<T> extends FilterBuilder<T> {
     const queryString = this.params.toString()
     const url = `${this.baseUrl}/${this.table}${queryString ? `?${queryString}` : ''}`
 
-    const init: RequestInit = {
+    let init: RequestInit = {
       method: this.method,
       headers: { ...this.headers },
     }
@@ -268,8 +286,24 @@ export class QueryBuilder<T> extends FilterBuilder<T> {
       init.body = JSON.stringify(this.body)
     }
 
+    // Apply request interceptor
+    if (this.middleware.onRequest) {
+      init = await this.middleware.onRequest(url, init)
+    }
+
     try {
-      const response = await this.fetchFn(url, init)
+      let response: Response
+
+      if (this.middleware.retry) {
+        response = await fetchWithRetry(this.fetchFn, url, init, this.middleware.retry)
+      } else {
+        response = await this.fetchFn(url, init)
+      }
+
+      // Apply response interceptor
+      if (this.middleware.onResponse) {
+        response = await this.middleware.onResponse(response)
+      }
 
       if (!response.ok) {
         // For maybeSingle, PostgREST returns 406 for both zero-row and

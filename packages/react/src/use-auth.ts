@@ -68,7 +68,7 @@ export function useAuth(): UseAuthResult {
           .getUser()
           .then(setUser)
           .catch(() => setUser(null))
-      } else if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESH_FAILED') {
         setUser(null)
       }
     })
@@ -97,7 +97,9 @@ export function useAuth(): UseAuthResult {
   const signInWithOAuth = useCallback(
     (provider: string, opts: { redirectTo: string }) => {
       const url = client.auth.signInWithOAuth(provider, opts)
-      window.location.href = url
+      if (typeof window !== 'undefined') {
+        window.location.href = url
+      }
     },
     [client],
   )

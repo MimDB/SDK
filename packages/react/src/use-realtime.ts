@@ -60,6 +60,9 @@ export function useRealtime<T = Record<string, unknown>>(
   const realtimeRef = useRef<MimDBRealtimeClient | null>(null)
 
   useEffect(() => {
+    // Skip WebSocket connections during SSR
+    if (typeof window === 'undefined') return
+
     const config = client.getConfig()
 
     if (!realtimeRef.current) {

@@ -6,11 +6,12 @@ import type { ApiEnvelope, Tokens, User } from './types'
 /**
  * Event types emitted when the authentication state changes.
  *
- * - `SIGNED_IN`       - A user signed in or signed up successfully.
- * - `SIGNED_OUT`      - The current user signed out.
- * - `TOKEN_REFRESHED` - The access token was refreshed.
+ * - `SIGNED_IN`             - A user signed in or signed up successfully.
+ * - `SIGNED_OUT`            - The current user signed out.
+ * - `TOKEN_REFRESHED`       - The access token was refreshed.
+ * - `TOKEN_REFRESH_FAILED`  - Automatic token refresh failed (session cleared).
  */
-export type AuthChangeEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED'
+export type AuthChangeEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED' | 'TOKEN_REFRESH_FAILED'
 
 /** @internal Callback signature for auth state change listeners. */
 type AuthChangeCallback = (
@@ -39,8 +40,10 @@ export class AuthClient {
   private readonly defaultHeaders: Record<string, string>
   private readonly tokenStore: TokenStore
   private readonly listeners: Set<AuthChangeCallback> = new Set()
+  private readonly autoRefresh: boolean
 
   private _admin: AuthAdminClient | null = null
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null
 
   /**
    * Callback invoked whenever the stored access token changes.
@@ -56,6 +59,7 @@ export class AuthClient {
    * @param fetchFn        - Fetch implementation.
    * @param defaultHeaders - Default headers (includes apikey and Authorization with the API key).
    * @param tokenStore     - Storage backend for access/refresh tokens.
+   * @param autoRefresh    - Whether to automatically refresh the access token before expiry. Defaults to true.
    */
   constructor(
     baseUrl: string,
@@ -63,12 +67,14 @@ export class AuthClient {
     fetchFn: typeof fetch,
     defaultHeaders: Record<string, string>,
     tokenStore: TokenStore,
+    autoRefresh: boolean = true,
   ) {
     this.baseUrl = baseUrl
     this.ref = ref
     this.fetchFn = fetchFn
     this.defaultHeaders = defaultHeaders
     this.tokenStore = tokenStore
+    this.autoRefresh = autoRefresh
   }
 
   // ---------------------------------------------------------------------------
@@ -171,6 +177,8 @@ export class AuthClient {
    * @throws {MimDBError} If the API returns an error response.
    */
   async signOut(): Promise<void> {
+    this.clearAutoRefresh()
+
     const url = `${this.baseUrl}/v1/auth/${this.ref}/logout`
 
     const session = this.tokenStore.get()
@@ -436,23 +444,75 @@ export class AuthClient {
   // ---------------------------------------------------------------------------
 
   /**
-   * Store tokens and notify the parent client about the new access token.
+   * Store tokens, notify the parent client about the new access token,
+   * and schedule automatic token refresh if enabled.
    *
    * @internal
    */
   private setSession(tokens: Tokens): void {
     this.tokenStore.set(tokens.access_token, tokens.refresh_token)
     this.onTokenChange?.(tokens.access_token)
+    if (this.autoRefresh) {
+      this.scheduleAutoRefresh(tokens.access_token)
+    }
   }
 
   /**
-   * Clear stored tokens and notify the parent client.
+   * Clear stored tokens, cancel any pending auto-refresh, and notify the
+   * parent client.
    *
    * @internal
    */
   private clearSession(): void {
+    this.clearAutoRefresh()
     this.tokenStore.clear()
     this.onTokenChange?.(null)
+  }
+
+  /**
+   * Schedule a token refresh shortly before the access token expires.
+   *
+   * Parses the JWT `exp` claim from the access token and sets a timer
+   * to call `refreshSession()` 30 seconds before expiry. If the refresh
+   * fails, the session is cleared and a `TOKEN_REFRESH_FAILED` event
+   * is emitted.
+   *
+   * @param accessToken - The current JWT access token.
+   * @internal
+   */
+  private scheduleAutoRefresh(accessToken: string): void {
+    this.clearAutoRefresh()
+    try {
+      const parts = accessToken.split('.')
+      if (!parts[1]) return
+      const payload = JSON.parse(atob(parts[1]))
+      const expiresAt = (payload.exp as number) * 1000
+      const refreshAt = expiresAt - 30_000
+      const delay = Math.max(refreshAt - Date.now(), 0)
+
+      this.refreshTimer = setTimeout(async () => {
+        try {
+          await this.refreshSession()
+        } catch {
+          this.clearSession()
+          this.emit('TOKEN_REFRESH_FAILED')
+        }
+      }, delay)
+    } catch {
+      // Invalid JWT structure - skip auto-refresh
+    }
+  }
+
+  /**
+   * Cancel any pending auto-refresh timer.
+   *
+   * @internal
+   */
+  private clearAutoRefresh(): void {
+    if (this.refreshTimer !== null) {
+      clearTimeout(this.refreshTimer)
+      this.refreshTimer = null
+    }
   }
 
   /**
