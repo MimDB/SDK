@@ -5,6 +5,11 @@ export { MimDBClient } from './client'
 export { MimDBError } from './errors'
 export { QueryBuilder } from './rest'
 export { FilterBuilder } from './filters'
+export { AuthClient } from './auth'
+export type { AuthChangeEvent } from './auth'
+export { AuthAdminClient } from './auth-admin'
+export { InMemoryTokenStore, LocalStorageTokenStore } from './auth-store'
+export type { TokenStore } from './auth-store'
 export type {
   QueryResult,
   OrderOptions,
@@ -12,6 +17,8 @@ export type {
   TextSearchType,
   TextSearchOptions,
   ClientOptions,
+  User,
+  Tokens,
 } from './types'
 
 /**

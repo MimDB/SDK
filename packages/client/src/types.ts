@@ -1,3 +1,4 @@
+import type { TokenStore } from './auth-store'
 import type { MimDBError } from './errors'
 
 /**
@@ -67,4 +68,44 @@ export interface ClientOptions {
   fetch?: typeof fetch
   /** Additional headers sent with every request. */
   headers?: Record<string, string>
+  /** Custom token store for auth session persistence. Defaults to `InMemoryTokenStore`. */
+  tokenStore?: TokenStore
+}
+
+// ---------------------------------------------------------------------------
+// Auth types
+// ---------------------------------------------------------------------------
+
+/**
+ * A user record returned by the MimDB auth API.
+ */
+export interface User {
+  /** Unique user identifier (UUID). */
+  id: string
+  /** User's email address. */
+  email: string
+  /** Whether the user's email has been confirmed. */
+  email_confirmed: boolean
+  /** Whether the user's phone has been confirmed. */
+  phone_confirmed: boolean
+  /** Application-level metadata (only writable by service_role). */
+  app_metadata: Record<string, unknown>
+  /** User-level metadata (writable by the user). */
+  user_metadata: Record<string, unknown>
+  /** ISO 8601 timestamp of when the user was created. */
+  created_at: string
+  /** ISO 8601 timestamp of when the user was last updated. */
+  updated_at: string
+}
+
+/**
+ * Token set returned after successful authentication.
+ */
+export interface Tokens {
+  /** JWT access token for authenticating API requests. */
+  access_token: string
+  /** Opaque token used to obtain a new access token. */
+  refresh_token: string
+  /** Number of seconds until the access token expires. */
+  expires_in: number
 }

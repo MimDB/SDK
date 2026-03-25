@@ -1,3 +1,6 @@
+import { AuthClient } from './auth'
+import { InMemoryTokenStore } from './auth-store'
+import type { TokenStore } from './auth-store'
 import { MimDBError } from './errors'
 import { QueryBuilder } from './rest'
 import type { ClientOptions, QueryResult } from './types'
@@ -27,6 +30,8 @@ export class MimDBClient {
   private readonly apiKey: string
   private readonly fetchFn: typeof fetch
   private readonly defaultHeaders: Record<string, string>
+  private _auth: AuthClient | null = null
+  private readonly tokenStore: TokenStore
 
   /**
    * @param url        - Base URL of the MimDB API (e.g. `https://api.mimdb.dev`).
@@ -52,6 +57,46 @@ export class MimDBClient {
       'apikey': this.apiKey,
       ...options?.headers,
     }
+
+    this.tokenStore = options?.tokenStore ?? new InMemoryTokenStore()
+  }
+
+  /**
+   * Access the authentication client for sign-up, sign-in, OAuth, and
+   * session management.
+   *
+   * The auth client is lazily instantiated on first access. When a user
+   * signs in or refreshes their session, the access token is automatically
+   * applied to subsequent REST queries.
+   *
+   * @example
+   * ```ts
+   * const { user } = await client.auth.signIn('user@example.com', 'password')
+   * // REST queries now use the authenticated user's token
+   * const { data } = await client.from('todos').select('*')
+   * ```
+   */
+  get auth(): AuthClient {
+    if (!this._auth) {
+      this._auth = new AuthClient(
+        this.baseUrl,
+        this.ref,
+        this.fetchFn,
+        { ...this.defaultHeaders },
+        this.tokenStore,
+      )
+
+      // Keep the REST Authorization header in sync with auth token changes
+      this._auth.onTokenChange = (accessToken) => {
+        if (accessToken) {
+          this.defaultHeaders['Authorization'] = `Bearer ${accessToken}`
+        } else {
+          this.defaultHeaders['Authorization'] = `Bearer ${this.apiKey}`
+        }
+      }
+    }
+
+    return this._auth
   }
 
   /**

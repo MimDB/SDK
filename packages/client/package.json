@@ -1,0 +1,38 @@
+{
+  "name": "@mimdb/client",
+  "version": "0.1.0",
+  "description": "MimDB client SDK - REST, Auth, Storage, Realtime",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mimdb/realtime": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.1",
+    "typescript": "^6.0.2"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MimDB/SDK",
+    "directory": "packages/client"
+  },
+  "keywords": ["mimdb", "mimisbrunnr", "baas", "database", "rest", "auth", "storage"]
+}
