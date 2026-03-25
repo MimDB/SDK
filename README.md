@@ -7,10 +7,68 @@ Official client SDKs for [MimDB](https://mimdb.dev) - a self-hosted Backend-as-a
 | Package | Version | Description |
 |---------|---------|-------------|
 | [`@mimdb/realtime`](./packages/realtime) | [![npm](https://img.shields.io/npm/v/@mimdb/realtime)](https://www.npmjs.com/package/@mimdb/realtime) | WebSocket client for realtime table change subscriptions |
-| `@mimdb/client` | Planned | Unified SDK (REST + Auth + Storage + Realtime) |
-| `@mimdb/react` | Planned | React hooks for MimDB |
+| [`@mimdb/client`](./packages/client) | [![npm](https://img.shields.io/npm/v/@mimdb/client)](https://www.npmjs.com/package/@mimdb/client) | Unified SDK (REST + Auth + Storage + Realtime) |
+| [`@mimdb/react`](./packages/react) | [![npm](https://img.shields.io/npm/v/@mimdb/react)](https://www.npmjs.com/package/@mimdb/react) | React hooks for MimDB |
 
 ## Quick Start
+
+```bash
+npm install @mimdb/client
+```
+
+```typescript
+import { createClient } from '@mimdb/client'
+
+const mimdb = createClient('https://api.mimdb.dev', '40891b0d', 'eyJ...')
+
+// REST queries
+const { data } = await mimdb.from('todos').select('*').eq('done', 'false')
+
+// Auth
+const { user } = await mimdb.auth.signIn('user@example.com', 'password')
+
+// Storage
+await mimdb.storage.from('avatars').upload('photo.png', file)
+
+// Realtime
+mimdb.realtime.subscribe('todos', {
+  event: '*',
+  onEvent: (e) => console.log(e.type, e.new),
+})
+```
+
+### React
+
+```bash
+npm install @mimdb/client @mimdb/react @tanstack/react-query
+```
+
+```tsx
+import { createClient } from '@mimdb/client'
+import { MimDBProvider, useQuery, useRealtime, useAuth } from '@mimdb/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+const mimdb = createClient('https://api.mimdb.dev', '40891b0d', 'eyJ...')
+const queryClient = new QueryClient()
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <MimDBProvider client={mimdb}>
+        <TodoList />
+      </MimDBProvider>
+    </QueryClientProvider>
+  )
+}
+
+function TodoList() {
+  const { data: todos } = useQuery('todos', { eq: { done: 'false' } })
+  useRealtime('todos') // auto-invalidates cache on changes
+  return <ul>{todos?.map(t => <li key={t.id}>{t.task}</li>)}</ul>
+}
+```
+
+### Realtime Only
 
 ```bash
 npm install @mimdb/realtime
