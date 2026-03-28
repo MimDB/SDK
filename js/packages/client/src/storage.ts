@@ -361,7 +361,11 @@ export class BucketClient {
     }
 
     const envelope = (await response.json()) as ApiEnvelope<{ signedURL: string }>
-    return { signedUrl: envelope.data.signedURL }
+    // The backend returns a relative path (/v1/storage/...). Prepend the
+    // base URL so consumers get a fully qualified URL they can fetch directly.
+    const relative = envelope.data.signedURL
+    const full = relative.startsWith('http') ? relative : `${this.baseUrl}${relative}`
+    return { signedUrl: full }
   }
 
   /**

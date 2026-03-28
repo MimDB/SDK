@@ -1,6 +1,6 @@
 {
   "name": "@mimdb/client",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "MimDB client SDK - REST, Auth, Storage, Realtime",
   "type": "module",
   "exports": {
