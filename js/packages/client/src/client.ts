@@ -57,7 +57,7 @@ export class MimDBClient {
     this.baseUrl = url.replace(/\/+$/, '')
     this.ref = projectRef
     this.apiKey = apiKey
-    this.fetchFn = options?.fetch ?? globalThis.fetch
+    this.fetchFn = options?.fetch ?? globalThis.fetch.bind(globalThis)
 
     this.defaultHeaders = {
       'Content-Type': 'application/json',
