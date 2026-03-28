@@ -133,7 +133,7 @@ export class AuthClient {
       expires_in: result.expires_in,
     }
 
-    this.setSession(tokens)
+    this.setSessionInternal(tokens)
     this.emit('SIGNED_IN')
     return { user: result.user, tokens }
   }
@@ -172,7 +172,7 @@ export class AuthClient {
       expires_in: result.expires_in,
     }
 
-    this.setSession(tokens)
+    this.setSessionInternal(tokens)
     this.emit('SIGNED_IN')
     return { user: result.user, tokens }
   }
@@ -244,7 +244,7 @@ export class AuthClient {
     const envelope = (await response.json()) as ApiEnvelope<Tokens>
     const tokens = envelope.data
 
-    this.setSession(tokens)
+    this.setSessionInternal(tokens)
     this.emit('TOKEN_REFRESHED')
     return tokens
   }
@@ -401,6 +401,35 @@ export class AuthClient {
     return this.tokenStore.get()
   }
 
+  /**
+   * Restore a session from previously saved tokens without making a
+   * network request. Useful for restoring sessions from storage or
+   * switching back to a saved session after temporary user switching.
+   *
+   * Fires a `SIGNED_IN` event and schedules auto-refresh if enabled.
+   *
+   * @param session - The access and refresh tokens to restore.
+   *
+   * @example
+   * ```ts
+   * // Save session before switching users
+   * const saved = mimdb.auth.getSession()
+   *
+   * // ... switch to another user ...
+   *
+   * // Restore original session
+   * mimdb.auth.setSession(saved)
+   * ```
+   */
+  setSession(session: { accessToken: string; refreshToken: string }): void {
+    this.setSessionInternal({
+      access_token: session.accessToken,
+      refresh_token: session.refreshToken,
+      expires_in: 0,
+    })
+    this.emit('SIGNED_IN')
+  }
+
   // ---------------------------------------------------------------------------
   // State change
   // ---------------------------------------------------------------------------
@@ -462,7 +491,7 @@ export class AuthClient {
    *
    * @internal
    */
-  private setSession(tokens: Tokens): void {
+  private setSessionInternal(tokens: Tokens): void {
     this.tokenStore.set(tokens.access_token, tokens.refresh_token)
     this.onTokenChange?.(tokens.access_token)
     if (this.autoRefresh) {
