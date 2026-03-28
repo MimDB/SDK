@@ -31,8 +31,8 @@ importers:
   packages/react:
     devDependencies:
       '@mimdb/client':
-        specifier: ^0.2.1
-        version: 0.2.1(ws@8.20.0)
+        specifier: ^0.3.0
+        version: 0.3.0(ws@8.20.0)
       '@mimdb/realtime':
         specifier: ^0.2.0
         version: 0.2.0(ws@8.20.0)
@@ -303,8 +303,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@mimdb/client@0.2.1':
-    resolution: {integrity: sha512-/5cqi3OmIiclAHQFWuutE/CCDKHl0jUBFyxZCNeRTVq0G43N4AQk0scrVAdIVKORVIU9p6eLCHkA1/0KJoMV/Q==}
+  '@mimdb/client@0.3.0':
+    resolution: {integrity: sha512-THdL4wQosX779K8MezT3eKxVUxYjcKWZydoOeGyZgZwLd0Bo9zyqeu7BeBvAIhP7BE+HTSCxGvNdIc6CtIGzag==}
 
   '@mimdb/realtime@0.1.1':
     resolution: {integrity: sha512-UqnjSecq/VFhxpjIt7HamyQprZxSEkvDoxNwvfU8mi1zwO6c8VdZEd7392bsNtb/MjDJVBZ7drvmjMXtZ6PZbg==}
@@ -1397,7 +1397,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@mimdb/client@0.2.1(ws@8.20.0)':
+  '@mimdb/client@0.3.0(ws@8.20.0)':
     dependencies:
       '@mimdb/realtime': 0.1.1(ws@8.20.0)
     transitivePeerDependencies:
