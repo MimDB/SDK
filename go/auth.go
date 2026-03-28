@@ -139,6 +139,40 @@ func (a *AuthClient) Logout(ctx context.Context, refreshToken string) error {
 	return nil
 }
 
+// SetSession restores a previously saved session by setting both the access
+// token and refresh token on the client. This allows applications to persist
+// tokens (e.g. to disk or secure storage) and restore them on restart without
+// making a network call.
+//
+// The access token is applied to the parent Client so subsequent API calls
+// authenticate as the restored user. The refresh token is returned alongside
+// the access token in the resulting Tokens value, enabling callers to later
+// call [AuthClient.Refresh] when the access token expires.
+//
+// SetSession is the Go equivalent of the JS SDK's auth.setSession().
+//
+//	err := client.Auth().SetSession("eyJhbGci...", "v1.refresh-token-abc")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	// Subsequent calls use the restored session.
+//	user, err := client.Auth().GetUser(ctx)
+func (a *AuthClient) SetSession(accessToken, refreshToken string) (*Tokens, error) {
+	if accessToken == "" {
+		return nil, fmt.Errorf("accessToken must not be empty")
+	}
+	if refreshToken == "" {
+		return nil, fmt.Errorf("refreshToken must not be empty")
+	}
+
+	a.client.SetAccessToken(accessToken)
+
+	return &Tokens{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
 // splitResponse destructures an authResponse into separate *User and *Tokens
 // values. This is shared by SignUp and SignIn.
 func (a *AuthClient) splitResponse(resp *authResponse) (*User, *Tokens, error) {

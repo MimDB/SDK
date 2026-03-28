@@ -18,7 +18,14 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
+
+// defaultHTTPTimeout is applied to the fallback http.Client when the caller
+// does not supply a custom one. 30 seconds matches the convention used in the
+// Mimisbrunnr backend's Cloudflare client and prevents indefinite hangs when
+// the remote server is slow or unreachable.
+const defaultHTTPTimeout = 30 * time.Second
 
 // Config holds transport-level configuration that is set once at client creation
 // and reused across all requests.
@@ -57,11 +64,15 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient creates a new transport client bound to the given base URL.
-// If Config.HTTPClient is nil, a default http.Client is used.
+// If Config.HTTPClient is nil, a default http.Client with a 30-second timeout
+// is used. Callers that need a different timeout should supply their own
+// *http.Client via Config.HTTPClient.
 func NewHTTPClient(baseURL string, config Config) *HTTPClient {
 	httpClient := config.HTTPClient
 	if httpClient == nil {
-		httpClient = &http.Client{}
+		httpClient = &http.Client{
+			Timeout: defaultHTTPTimeout,
+		}
 	}
 	return &HTTPClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
