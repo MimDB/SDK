@@ -252,7 +252,7 @@ describe('BucketClient', () => {
 
       const result = await bucket.createSignedUrl('photo.png')
 
-      expect(result.signedUrl).toBe('/v1/storage/abc123/object/avatars/photo.png?token=tok')
+      expect(result.signedUrl).toBe(`${URL}/v1/storage/abc123/object/avatars/photo.png?token=tok`)
 
       const call = vi.mocked(fetchFn).mock.calls[0]!
       const url = call[0] as string
