@@ -81,15 +81,21 @@ export class QueryBuilder<T> extends FilterBuilder<T> {
    * it requests the affected rows back via `Prefer: return=representation`.
    *
    * @param columns - Comma-separated column list. Defaults to `'*'`.
+   * @param options - Optional modifiers.
+   * @param options.count - Request a row count via the `Prefer` header (`'exact'`, `'planned'`, or `'estimated'`).
+   * @param options.head  - When true, sends a HEAD request (count only, no body).
    * @returns This builder for chaining filters and modifiers.
    */
-  select(columns: string = '*'): this {
+  select(columns: string = '*', options?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }): this {
     // Only set GET when select() is the primary operation, not after a mutation
     if (!this.isMutation) {
-      this.method = 'GET'
+      this.method = options?.head ? 'HEAD' : 'GET'
     }
     this.params.set('select', columns)
     this.hasSelect = true
+    if (options?.count) {
+      this.appendPrefer(`count=${options.count}`)
+    }
     return this
   }
 
