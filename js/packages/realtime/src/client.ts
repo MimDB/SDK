@@ -77,6 +77,21 @@ export class MimDBRealtimeClient {
     this.maxReconnectDelay = options.maxReconnectDelay ?? DEFAULT_MAX_RECONNECT_DELAY
     this.maxRetries = options.maxRetries ?? Infinity
     this.WSConstructor = options.WebSocket ?? globalThis.WebSocket
+
+    // Reconnect immediately when a background tab becomes visible.
+    // Browsers throttle setTimeout in background tabs, which kills
+    // the heartbeat ping and causes the server to drop the connection.
+    // This listener bypasses the throttled reconnect timer.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this._state !== 'connected' && this._state !== 'connecting') {
+          if (!this.intentionalClose && this.subscriptions.size > 0) {
+            this.retryCount = 0
+            this.doConnect()
+          }
+        }
+      })
+    }
   }
 
   /** Current connection state. */
