@@ -128,6 +128,14 @@ export class MimDBClient {
           this.defaultHeaders['Authorization'] = `Bearer ${this.apiKey}`
         }
       }
+
+      // Hydrate from existing session in the token store (e.g., restored
+      // from localStorage/cookie on page reload). Without this, REST queries
+      // use the anon API key until the next auth event fires.
+      const existing = this.tokenStore.get()
+      if (existing?.accessToken) {
+        this.defaultHeaders['Authorization'] = `Bearer ${existing.accessToken}`
+      }
     }
 
     return this._auth
