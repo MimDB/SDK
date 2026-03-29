@@ -42,6 +42,7 @@ const INITIAL_RECONNECT_DELAY = 1_000
 export class MimDBRealtimeClient {
   private readonly url: string
   private readonly projectRef: string
+  private readonly anonKey: string
   private apiKey: string
   private readonly autoConnect: boolean
   private readonly heartbeatInterval: number
@@ -70,6 +71,7 @@ export class MimDBRealtimeClient {
   constructor(options: RealtimeClientOptions) {
     this.url = options.url
     this.projectRef = options.projectRef
+    this.anonKey = options.apiKey
     this.apiKey = options.apiKey
     this.autoConnect = options.autoConnect ?? true
     this.heartbeatInterval = options.heartbeatInterval ?? DEFAULT_HEARTBEAT_INTERVAL
@@ -185,7 +187,15 @@ export class MimDBRealtimeClient {
   private doConnect(): void {
     const protocol = this.url.startsWith('https') ? 'wss' : 'ws'
     const host = this.url.replace(/^https?:\/\//, '')
-    const wsUrl = `${protocol}://${host}/v1/realtime/${this.projectRef}?apikey=${this.apiKey}`
+    // Use the anon key for project identification in the URL. The user's
+    // access token (set via setToken) is sent separately so the server can
+    // verify it as a JWT. Browser WebSocket API cannot set custom headers,
+    // so both values go in query params.
+    const params = new URLSearchParams({ apikey: this.anonKey })
+    if (this.apiKey !== this.anonKey) {
+      params.set('token', this.apiKey)
+    }
+    const wsUrl = `${protocol}://${host}/v1/realtime/${this.projectRef}?${params}`
 
     this._state = 'connecting'
     this.ws = new this.WSConstructor(wsUrl)

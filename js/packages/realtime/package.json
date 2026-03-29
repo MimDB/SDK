@@ -1,6 +1,6 @@
 {
   "name": "@mimdb/realtime",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Realtime WebSocket client for Mimisbrunnr",
   "type": "module",
   "exports": {
