@@ -311,8 +311,8 @@ export class QueryBuilder<T> extends FilterBuilder<T> {
         // result is a real error the caller needs to know about.
         if (this.isMaybeSingle && response.status === 406) {
           const error = await MimDBError.fromResponse(response)
-          const msg = error.message.toLowerCase()
-          if (msg.includes('0 rows') || msg.includes('zero')) {
+          const combined = `${error.code} ${error.message} ${error.detail ?? ''}`.toLowerCase()
+          if (error.code === 'PGRST106' || combined.includes('0 rows') || combined.includes('zero')) {
             return {
               data: null,
               error: null,

@@ -15,18 +15,22 @@ export class MimDBError extends Error {
   /** Optional hint from PostgREST suggesting how to fix the issue. */
   readonly hint?: string
 
+  /** Optional detail string from PostgREST error responses. */
+  readonly detail?: string
+
   /**
    * @param message - Human-readable error description.
    * @param code    - Machine-readable error code.
    * @param status  - HTTP status code.
    * @param hint    - Optional remediation hint from PostgREST.
    */
-  constructor(message: string, code: string, status: number, hint?: string) {
+  constructor(message: string, code: string, status: number, hint?: string, detail?: string) {
     super(message)
     this.name = 'MimDBError'
     this.code = code
     this.status = status
     this.hint = hint
+    this.detail = detail
   }
 
   /**
@@ -45,11 +49,13 @@ export class MimDBError extends Error {
       // The backend always returns { data, error, meta }.
       // PostgREST responses are flat objects with code/message at root.
       const err = (body.error ?? body) as Record<string, unknown>
+      const detail = (err.details as string | undefined) ?? (err.detail as string | undefined)
       return new MimDBError(
         (err.message as string | undefined) ?? response.statusText,
         (err.code as string | undefined) ?? (err.error_code as string | undefined) ?? `HTTP-${response.status}`,
         response.status,
-        (err.hint as string | undefined) ?? (err.detail as string | undefined),
+        (err.hint as string | undefined),
+        detail,
       )
     } catch {
       return new MimDBError(

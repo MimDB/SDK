@@ -62,7 +62,7 @@ describe('MimDBError', () => {
       expect(err.message).toBe('Invalid credentials')
       expect(err.code).toBe('AUTH-0300')
       expect(err.status).toBe(401)
-      expect(err.hint).toBe('Email or password is incorrect')
+      expect(err.detail).toBe('Email or password is incorrect')
     })
 
     it('parses a nested error object', async () => {
