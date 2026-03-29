@@ -203,6 +203,28 @@ export class QueryBuilder<T> extends FilterBuilder<T> {
   }
 
   /**
+   * Restrict the result to rows within the given index range (inclusive).
+   *
+   * Sets the `Range` header for PostgREST/MimREST keyset pagination.
+   * The range is zero-based and inclusive on both ends.
+   *
+   * @param from - Start index (inclusive).
+   * @param to   - End index (inclusive).
+   * @returns This builder for chaining.
+   *
+   * @example
+   * ```ts
+   * // Get rows 0 through 49 (first 50)
+   * const { data } = await mimdb.from('players').select('*').range(0, 49)
+   * ```
+   */
+  range(from: number, to: number): this {
+    this.headers['Range'] = `${from}-${to}`
+    this.headers['Range-Unit'] = 'items'
+    return this
+  }
+
+  /**
    * Expect exactly one row in the response.
    *
    * Sets the `Accept` header to `application/vnd.pgrst.object+json` so
