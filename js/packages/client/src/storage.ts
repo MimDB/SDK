@@ -274,6 +274,53 @@ export class BucketClient {
   }
 
   /**
+   * List objects in a bucket, optionally filtered by a path prefix.
+   *
+   * @param folder  - Path prefix to filter objects (e.g. `'items/'`). Defaults to empty (all objects).
+   * @param opts    - Optional pagination and sort options.
+   * @param opts.limit  - Maximum number of results. Server default applies if omitted.
+   * @param opts.cursor - Keyset pagination cursor from a previous response.
+   * @param opts.order  - Sort order: `'asc'` (default) or `'desc'`.
+   * @returns An object with the list of storage objects and pagination metadata.
+   * @throws {MimDBError} If the API returns an error.
+   *
+   * @example
+   * ```ts
+   * const { data, hasMore } = await bucket.list('items/', { limit: 100 })
+   * ```
+   */
+  async list(
+    folder?: string,
+    opts?: { limit?: number; cursor?: string; order?: 'asc' | 'desc' },
+  ): Promise<{ data: StorageObject[]; nextCursor: string | null; hasMore: boolean }> {
+    const params = new URLSearchParams()
+    if (folder) params.set('prefix', `${this.bucket}/${folder}`)
+    else params.set('prefix', `${this.bucket}/`)
+    if (opts?.limit !== undefined) params.set('limit', String(opts.limit))
+    if (opts?.cursor) params.set('cursor', opts.cursor)
+    if (opts?.order) params.set('order', opts.order)
+
+    const qs = params.toString()
+    const url = `${this.baseUrl}/v1/storage/${this.ref}/object/${this.bucket}${qs ? `?${qs}` : ''}`
+
+    const response = await this.fetchFn(url, {
+      method: 'GET',
+      headers: { ...this.defaultHeaders },
+    })
+
+    if (!response.ok) {
+      throw await MimDBError.fromResponse(response)
+    }
+
+    const envelope = (await response.json()) as ApiEnvelope<StorageObject[]>
+    return {
+      data: envelope.data,
+      nextCursor: envelope.meta.next_cursor ?? null,
+      hasMore: envelope.meta.has_more ?? false,
+    }
+  }
+
+  /**
    * Download a file from the bucket.
    *
    * @param path - Object path within the bucket.

@@ -284,15 +284,16 @@ export class AuthClient {
   }
 
   /**
-   * Update the currently authenticated user's profile.
+   * Update the currently authenticated user's profile and/or password.
    *
    * @param data - Fields to update.
    * @param data.userMetadata - User-level metadata to merge into the profile.
+   * @param data.password - New password (minimum 8 characters).
    * @returns The updated user profile.
    * @throws {MimDBError} If no session exists or the API returns an error.
    */
   async updateUser(
-    data: { userMetadata?: Record<string, unknown> },
+    data: { userMetadata?: Record<string, unknown>; password?: string },
   ): Promise<User> {
     const url = `${this.baseUrl}/v1/auth/${this.ref}/user`
     const session = this.tokenStore.get()
@@ -305,6 +306,9 @@ export class AuthClient {
     const body: Record<string, unknown> = {}
     if (data.userMetadata !== undefined) {
       body.user_metadata = data.userMetadata
+    }
+    if (data.password !== undefined) {
+      body.password = data.password
     }
 
     const response = await this.fetchFn(url, {
@@ -319,6 +323,50 @@ export class AuthClient {
 
     const envelope = (await response.json()) as ApiEnvelope<User>
     return envelope.data
+  }
+
+  // ---------------------------------------------------------------------------
+  // Password reset
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Send a password reset email to the given address.
+   *
+   * The backend always returns 200 OK regardless of whether the email
+   * exists, preventing email enumeration.
+   *
+   * @param email      - Email address to send the reset link to.
+   * @param opts       - Optional configuration.
+   * @param opts.redirectTo - URL to redirect the user to after they click the reset link.
+   * @throws {MimDBError} If the API returns a non-200 response.
+   *
+   * @example
+   * ```ts
+   * await mimdb.auth.resetPasswordForEmail('user@example.com', {
+   *   redirectTo: 'https://myapp.com/reset-password',
+   * })
+   * ```
+   */
+  async resetPasswordForEmail(
+    email: string,
+    opts?: { redirectTo?: string },
+  ): Promise<void> {
+    const url = `${this.baseUrl}/v1/auth/${this.ref}/forgot-password`
+
+    const body: Record<string, unknown> = { email }
+    if (opts?.redirectTo !== undefined) {
+      body.redirect_to = opts.redirectTo
+    }
+
+    const response = await this.fetchFn(url, {
+      method: 'POST',
+      headers: { ...this.defaultHeaders },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      throw await MimDBError.fromResponse(response)
+    }
   }
 
   // ---------------------------------------------------------------------------
