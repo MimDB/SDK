@@ -79,6 +79,15 @@ export class MimDBClient {
       onRequest: options?.onRequest,
       onResponse: options?.onResponse,
     }
+
+    // Hydrate from existing session in the token store (e.g., restored
+    // from localStorage/cookie on page reload). This runs unconditionally
+    // in the constructor so REST queries use the stored token even if
+    // client.auth is never accessed.
+    const existing = this.tokenStore.get()
+    if (existing?.accessToken) {
+      this.defaultHeaders['Authorization'] = `Bearer ${existing.accessToken}`
+    }
   }
 
   /**
@@ -129,13 +138,6 @@ export class MimDBClient {
         }
       }
 
-      // Hydrate from existing session in the token store (e.g., restored
-      // from localStorage/cookie on page reload). Without this, REST queries
-      // use the anon API key until the next auth event fires.
-      const existing = this.tokenStore.get()
-      if (existing?.accessToken) {
-        this.defaultHeaders['Authorization'] = `Bearer ${existing.accessToken}`
-      }
     }
 
     return this._auth
