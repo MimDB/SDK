@@ -15,8 +15,8 @@ importers:
   packages/client:
     dependencies:
       '@mimdb/realtime':
-        specifier: ^0.1.1
-        version: 0.1.1(ws@8.20.0)
+        specifier: ^0.4.0
+        version: 0.4.0(ws@8.20.0)
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -316,6 +316,14 @@ packages:
 
   '@mimdb/realtime@0.2.0':
     resolution: {integrity: sha512-ULAEcEDm3nsFCaB4NmzXvycExh+oKmimG3fVAv1W5rxokgsWICM/W1/14HkOQIjOy4gwHI6+Sw5JgeRxbAVRDw==}
+    peerDependencies:
+      ws: '>=8.0.0'
+    peerDependenciesMeta:
+      ws:
+        optional: true
+
+  '@mimdb/realtime@0.4.0':
+    resolution: {integrity: sha512-AiZeUYhPLXSeCOGfmSZghsNw7SXOcer2aRqP49ot26n1tWkRrf/dGH/JhoFpxS2/1vUWnS4cQT+/Rx0F9Ez+TQ==}
     peerDependencies:
       ws: '>=8.0.0'
     peerDependenciesMeta:
@@ -1408,6 +1416,10 @@ snapshots:
       ws: 8.20.0
 
   '@mimdb/realtime@0.2.0(ws@8.20.0)':
+    optionalDependencies:
+      ws: 8.20.0
+
+  '@mimdb/realtime@0.4.0(ws@8.20.0)':
     optionalDependencies:
       ws: 8.20.0
 

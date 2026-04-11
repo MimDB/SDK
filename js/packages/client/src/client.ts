@@ -129,12 +129,16 @@ export class MimDBClient {
         this.options?.autoRefresh,
       )
 
-      // Keep the REST Authorization header in sync with auth token changes
+      // Keep the REST Authorization header and realtime token in sync
       this._auth.onTokenChange = (accessToken) => {
         if (accessToken) {
           this.defaultHeaders['Authorization'] = `Bearer ${accessToken}`
         } else {
           this.defaultHeaders['Authorization'] = `Bearer ${this.apiKey}`
+        }
+        // Forward to realtime so active subscriptions re-authenticate
+        if (this._realtime) {
+          this._realtime.setToken(accessToken ?? '')
         }
       }
 

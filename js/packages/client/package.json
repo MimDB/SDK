@@ -1,6 +1,6 @@
 {
   "name": "@mimdb/client",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "MimDB client SDK - REST, Auth, Storage, Realtime",
   "type": "module",
   "exports": {
@@ -21,7 +21,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@mimdb/realtime": "^0.1.1"
+    "@mimdb/realtime": "^0.4.0"
   },
   "devDependencies": {
     "tsup": "^8.5.1",
