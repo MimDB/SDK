@@ -1,6 +1,6 @@
 {
   "name": "@mimdb/client",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "MimDB client SDK - REST, Auth, Storage, Realtime",
   "type": "module",
   "exports": {
@@ -13,7 +13,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup && tsc --emitDeclarationOnly --outDir dist",
     "test": "vitest run",
@@ -34,5 +36,13 @@
     "url": "https://github.com/MimDB/SDK",
     "directory": "packages/client"
   },
-  "keywords": ["mimdb", "mimisbrunnr", "baas", "database", "rest", "auth", "storage"]
+  "keywords": [
+    "mimdb",
+    "mimisbrunnr",
+    "baas",
+    "database",
+    "rest",
+    "auth",
+    "storage"
+  ]
 }
