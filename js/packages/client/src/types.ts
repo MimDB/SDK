@@ -237,4 +237,13 @@ export interface StorageObject {
 export interface UploadOptions {
   /** MIME type of the file. Defaults to `application/octet-stream`. */
   contentType?: string
+  /**
+   * Replace the object if one already exists at this path.
+   *
+   * When omitted or `false`, uploading to an occupied path fails with a
+   * `409` (`STOR-0301`). When `true`, the existing object's contents are
+   * replaced in place, so readers see either the old or the new bytes and
+   * never a missing object.
+   */
+  upsert?: boolean
 }

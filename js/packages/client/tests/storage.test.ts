@@ -276,3 +276,107 @@ describe('BucketClient', () => {
     })
   })
 })
+
+describe('BucketClient.upload() upsert', () => {
+  function createBucket(fetchFn: typeof fetch) {
+    return new StorageClient(URL, REF, fetchFn, {
+      'Authorization': `Bearer ${KEY}`,
+      'apikey': KEY,
+    }).from('avatars')
+  }
+
+  it('does not send x-upsert when the option is omitted', async () => {
+    const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
+    await createBucket(fetchFn).upload('photo.png', 'data')
+
+    const init = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][1]
+    expect(init.headers['x-upsert']).toBeUndefined()
+  })
+
+  it('sends x-upsert: true when upsert is enabled', async () => {
+    const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
+    await createBucket(fetchFn).upload('photo.png', 'data', { upsert: true })
+
+    const init = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][1]
+    expect(init.headers['x-upsert']).toBe('true')
+  })
+
+  it('does not send x-upsert when upsert is explicitly false', async () => {
+    const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
+    await createBucket(fetchFn).upload('photo.png', 'data', { upsert: false })
+
+    const init = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][1]
+    expect(init.headers['x-upsert']).toBeUndefined()
+  })
+})
+
+describe('BucketClient.list()', () => {
+  function createBucket(fetchFn: typeof fetch) {
+    return new StorageClient(URL, REF, fetchFn, {
+      'Authorization': `Bearer ${KEY}`,
+      'apikey': KEY,
+    }).from('avatars')
+  }
+
+  // Object paths are stored relative to their bucket, and the bucket is
+  // already identified by the URL, so the prefix must not repeat it.
+  it('sends a bucket-relative prefix for a folder', async () => {
+    const fetchFn = mockFetch(200, envelope([MOCK_OBJECT]))
+    await createBucket(fetchFn).list('items/')
+
+    const url = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(new globalThis.URL(url).searchParams.get('prefix')).toBe('items/')
+  })
+
+  it('sends an empty prefix when no folder is given', async () => {
+    const fetchFn = mockFetch(200, envelope([MOCK_OBJECT]))
+    await createBucket(fetchFn).list()
+
+    const url = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(new globalThis.URL(url).searchParams.get('prefix')).toBe('')
+  })
+})
+
+describe('BucketClient.upload() upsert is strict', () => {
+  function createBucket(fetchFn: typeof fetch) {
+    return new StorageClient(URL, REF, fetchFn, {
+      'Authorization': `Bearer ${KEY}`,
+      'apikey': KEY,
+    }).from('avatars')
+  }
+
+  // An untyped caller can pass anything. Only `true` may enable replacement:
+  // a truthy string like "false" turning an upload into an overwrite destroys
+  // data silently, where refusing costs a visible 409.
+  it.each([['false'], [1], ['yes'], [{}]])(
+    'does not send x-upsert for truthy non-boolean %p',
+    async (value) => {
+      const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
+      await createBucket(fetchFn).upload('photo.png', 'data', {
+        upsert: value as unknown as boolean,
+      })
+
+      const init = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][1]
+      expect(init.headers['x-upsert']).toBeUndefined()
+    },
+  )
+})
+
+describe('count parsing from content-range', () => {
+  it('reads zero from an empty-result range', async () => {
+    // The server sends "*/0" for an empty result: there is no range to
+    // report, but the total is known and is zero. Reading it as null would
+    // make "no rows" indistinguishable from "no count requested".
+    const fetchFn = mockFetch(200, [], { 'content-range': '*/0' })
+    const client = new MimDBClient(URL, REF, KEY, { fetch: fetchFn })
+    const res = await client.from('items').select('*').execute()
+    expect(res.count).toBe(0)
+  })
+
+  it('reads a total from a populated range', async () => {
+    const fetchFn = mockFetch(200, [{ id: 1 }], { 'content-range': '0-0/42' })
+    const client = new MimDBClient(URL, REF, KEY, { fetch: fetchFn })
+    const res = await client.from('items').select('*').execute()
+    expect(res.count).toBe(42)
+  })
+})
