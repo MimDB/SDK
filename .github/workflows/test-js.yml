@@ -1,0 +1,47 @@
+name: Test JS SDK
+
+on:
+  pull_request:
+    paths:
+      - 'js/**'
+      - '.github/workflows/test-js.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'js/**'
+
+defaults:
+  run:
+    working-directory: js
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: js/pnpm-lock.yaml
+
+      # Frozen lockfile: a pull request that changes dependencies without
+      # updating the lockfile should fail here rather than resolve to
+      # something the committed lockfile never described.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r lint
+
+      - name: Test
+        run: pnpm -r test
+
+      # The published artefact is the build output, so a change that passes
+      # its tests but cannot be built is still broken for consumers.
+      - name: Build
+        run: pnpm -r build
