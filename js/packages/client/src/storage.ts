@@ -266,7 +266,10 @@ export class BucketClient {
 
     const headers: Record<string, string> = { ...this.defaultHeaders }
     headers['Content-Type'] = opts?.contentType ?? 'application/octet-stream'
-    if (opts?.upsert) headers['x-upsert'] = 'true'
+    // Strictly true, not merely truthy. An untyped caller passing the string
+    // "false" would otherwise turn an upload into an overwrite. Erring the
+    // other way costs a visible 409; erring this way destroys data quietly.
+    if (opts?.upsert === true) headers['x-upsert'] = 'true'
 
     const response = await this.fetchFn(url, {
       method: 'POST',
