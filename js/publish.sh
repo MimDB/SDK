@@ -21,17 +21,21 @@ trap restore EXIT
 for pkg in realtime client react; do
   dir="packages/$pkg"
 
+  local_version=$(node -p "require('./$dir/package.json').version")
+
   # Skip anything already on npm. Publishing over an existing version is
   # refused, and with set -e that would abort the run before reaching the
-  # package that actually changed.
-  published=$(npm view "@mimdb/$pkg" version 2>/dev/null || echo "none")
-  local_version=$(node -p "require('./$dir/package.json').version")
+  # package that actually changed. The lookup asks for the exact version
+  # rather than the package, because a bare "npm view <pkg> version" answers
+  # which version carries the "latest" tag: a republish of an older version
+  # that is on npm but not tagged latest would slip past that check.
+  published=$(npm view "@mimdb/$pkg@$local_version" version 2>/dev/null || echo "none")
   if [ "$published" = "$local_version" ]; then
     echo "=== Skipping @mimdb/$pkg@$local_version (already published) ==="
     continue
   fi
 
-  echo "=== Publishing @mimdb/$pkg@$local_version (npm has: $published) ==="
+  echo "=== Publishing @mimdb/$pkg@$local_version ==="
 
   cp "$dir/package.json" "$dir/package.json.bak"
   node -e "
