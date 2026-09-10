@@ -183,7 +183,7 @@ MimDB provides a well-structured SDK with solid coverage of core database and re
 
 | Feature | Supabase | MimDB | Status |
 |---------|----------|-------|--------|
-| `.upload(path, body, opts)` | ✓ | ✓ | ✓ IMPLEMENTED |
+| `.upload(path, body, opts)` | ✓ | ✓ (incl. `upsert`) | ✓ IMPLEMENTED |
 | `.download(path)` | ✓ | ✓ | ✓ IMPLEMENTED |
 | `.remove(paths[])` | ✓ | ✓ | ✓ IMPLEMENTED |
 | `.move(from, to)` | ✓ | MISSING | **P1 - IMPORTANT** |

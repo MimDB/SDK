@@ -276,3 +276,63 @@ describe('BucketClient', () => {
     })
   })
 })
+
+describe('BucketClient.upload() upsert', () => {
+  function createBucket(fetchFn: typeof fetch) {
+    return new StorageClient(URL, REF, fetchFn, {
+      'Authorization': `Bearer ${KEY}`,
+      'apikey': KEY,
+    }).from('avatars')
+  }
+
+  it('does not send x-upsert when the option is omitted', async () => {
+    const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
+    await createBucket(fetchFn).upload('photo.png', 'data')
+
+    const init = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][1]
+    expect(init.headers['x-upsert']).toBeUndefined()
+  })
+
+  it('sends x-upsert: true when upsert is enabled', async () => {
+    const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
+    await createBucket(fetchFn).upload('photo.png', 'data', { upsert: true })
+
+    const init = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][1]
+    expect(init.headers['x-upsert']).toBe('true')
+  })
+
+  it('does not send x-upsert when upsert is explicitly false', async () => {
+    const fetchFn = mockFetch(201, envelope(MOCK_OBJECT))
+    await createBucket(fetchFn).upload('photo.png', 'data', { upsert: false })
+
+    const init = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][1]
+    expect(init.headers['x-upsert']).toBeUndefined()
+  })
+})
+
+describe('BucketClient.list()', () => {
+  function createBucket(fetchFn: typeof fetch) {
+    return new StorageClient(URL, REF, fetchFn, {
+      'Authorization': `Bearer ${KEY}`,
+      'apikey': KEY,
+    }).from('avatars')
+  }
+
+  // Object paths are stored relative to their bucket, and the bucket is
+  // already identified by the URL, so the prefix must not repeat it.
+  it('sends a bucket-relative prefix for a folder', async () => {
+    const fetchFn = mockFetch(200, envelope([MOCK_OBJECT]))
+    await createBucket(fetchFn).list('items/')
+
+    const url = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(new globalThis.URL(url).searchParams.get('prefix')).toBe('items/')
+  })
+
+  it('sends an empty prefix when no folder is given', async () => {
+    const fetchFn = mockFetch(200, envelope([MOCK_OBJECT]))
+    await createBucket(fetchFn).list()
+
+    const url = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(new globalThis.URL(url).searchParams.get('prefix')).toBe('')
+  })
+})

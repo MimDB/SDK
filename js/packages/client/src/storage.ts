@@ -248,6 +248,14 @@ export class BucketClient {
    *   contentType: 'text/markdown',
    * })
    * ```
+   *
+   * @example Replace an existing object
+   * ```ts
+   * const obj = await bucket.upload('docs/readme.md', markdownBlob, {
+   *   contentType: 'text/markdown',
+   *   upsert: true,
+   * })
+   * ```
    */
   async upload(
     path: string,
@@ -258,6 +266,7 @@ export class BucketClient {
 
     const headers: Record<string, string> = { ...this.defaultHeaders }
     headers['Content-Type'] = opts?.contentType ?? 'application/octet-stream'
+    if (opts?.upsert) headers['x-upsert'] = 'true'
 
     const response = await this.fetchFn(url, {
       method: 'POST',
@@ -294,8 +303,9 @@ export class BucketClient {
     opts?: { limit?: number; cursor?: string; order?: 'asc' | 'desc' },
   ): Promise<{ data: StorageObject[]; nextCursor: string | null; hasMore: boolean }> {
     const params = new URLSearchParams()
-    if (folder) params.set('prefix', `${this.bucket}/${folder}`)
-    else params.set('prefix', `${this.bucket}/`)
+    // Object paths are stored relative to their bucket, and the bucket is
+    // already named in the request URL, so the prefix must not repeat it.
+    params.set('prefix', folder ?? '')
     if (opts?.limit !== undefined) params.set('limit', String(opts.limit))
     if (opts?.cursor) params.set('cursor', opts.cursor)
     if (opts?.order) params.set('order', opts.order)
